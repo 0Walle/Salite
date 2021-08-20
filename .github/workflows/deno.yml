@@ -19,11 +19,11 @@ jobs:
 
       - name: Run Bundle
         run: | 
-          mkdir -p build/js
-          deno bundle interpreter.ts build/js/salite.js
+          mkdir -p gh-pages/js
+          deno bundle interpreter.ts gh-pages/js/salite.js
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@4.1.4
         with:
           branch: gh-pages
-          folder: build
+          folder: gh-pages
