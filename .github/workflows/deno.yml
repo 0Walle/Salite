@@ -18,7 +18,9 @@ jobs:
           deno-version: v1.x
 
       - name: Run Bundle
-        run: deno bundle Salite/interpreter.ts build/js/salite.js
+        run: | 
+          mkdir -p build/js
+          deno bundle interpreter.ts build/js/salite.js
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@4.1.4
