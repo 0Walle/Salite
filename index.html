@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salite</title>
+    <link rel="stylesheet" href="css/font.css">
+    <style>
+        html {
+            background-color: #131516 !important;
+        }
+
+        body {
+            margin: 0px;
+            background: transparent;
+        }
+
+        .editor-style {
+            position: absolute;
+            top: 0;
+            left: 0;
+            font-family: 'Salite', 'Consolas', 'Fira Code', monospace;
+            font-size: 18px;
+            margin: 0px;
+            padding: 10px;
+            border: 0;
+
+            line-height: 24px;
+
+            width: calc(100% - 20px);
+            height: 150px;
+
+            /* overflow: auto; */
+        }
+
+        #salite-input {
+            z-index: 1;
+            background: transparent;
+            color: transparent;
+            caret-color: white;
+            resize: none;
+            outline: none;
+        }
+
+        #salite-code {
+            z-index: 0;
+            background-color: #0e0e0e;
+            overflow: hidden;
+        }
+
+        #edit-container {
+            height: 180px;
+            position: relative;
+        }
+
+        .salite-theme {
+            font-family: 'Salite', 'Consolas', 'Fira Code', monospace;
+            background-color: #0e0e0e;
+            color: #afafaf;
+        }
+
+        #salite-output {
+            padding: 10px;
+            border: 0;
+            width: calc(100% - 20px);
+            white-space: pre;
+            overflow-x: auto;
+
+            line-height: 18px;
+        }
+
+        #salite-symboard {
+            padding: 5px;
+            border: 0;
+            width: calc(100% - 10px);
+            margin-bottom: 10px;
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        #salite-symboard span {
+            padding: 0px 2px;
+            user-select: none;
+        }
+
+        #salite-symboard span:hover {
+            background-color: #4e4e4e;
+        }
+
+        #general-container {
+            width: 70vw;
+            margin-left: auto;
+            margin-right: auto;
+            margin-top: 50px;
+        }
+
+        .salitehl {
+            color: #afafaf;
+            white-space: pre;
+        }
+
+        .salitehl-func { color: #36F95F; }
+        .salitehl-monad { color: #F6A95F; }
+        .salitehl-dyad { color: #F6595F; }
+        .salitehl-string { color: #66D9EF; }
+        .salitehl-const { color: #B649BF; }
+        .salitehl-comment { color: #55566b; }
+        .salitehl-error { text-decoration: underline wavy #F6595F; }
+    </style>
+</head>
+<body>
+    <script type="module" src="./js/salite.js"></script>
+    <div id='general-container'>
+        <div id="salite-symboard" class="salite-theme">
+        </div>
+        <div id="edit-container">
+            <textarea id="salite-input" class='editor-style' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+            <div id='salite-code' class='salitehl editor-style'></div>
+        </div>
+        <div id='salite-output' class='salite-theme'>&nbsp;</div>
+    </div>
+    <script type="module">
+        import { run, tokens, pretty_value, symbol_names, symbol_overstrike } from "./js/salite.js"
+
+        const input = document.getElementById('salite-input')
+        const display = document.getElementById('salite-code')
+        const output = document.getElementById('salite-output')
+
+        const symbol_board = document.getElementById('salite-symboard')
+
+        function editor_insert(text) {
+            const start = input.selectionStart
+            const end = input.selectionEnd
+            input.value = input.value.slice(0, start) + text + input.value.slice(end)
+            update()
+            input.selectionStart = start + text.length
+            input.selectionEnd = start + text.length
+            input.focus()
+        }
+
+        function init() {
+            function element(name, title, hl) {
+                const btn = document.createElement('span')
+
+                if (symbol_overstrike[name] != undefined) {
+                    title = title + `\n\nType: ${symbol_overstrike[name]} <tab>`
+                }
+
+                btn.innerText = name
+                btn.classList.add(hl)
+                btn.setAttribute('title', title)
+                btn.addEventListener('click', () => editor_insert(name) )
+
+                symbol_board.appendChild(btn)
+            }
+
+            for (const func in symbol_names.functions) {
+                element(func, `${symbol_names.functions[func][0] ?? '-'}\n${symbol_names.functions[func][1] ?? '-'}`, 'salitehl-func')
+            }
+
+            for (const func in symbol_names.monads) {
+                element(func, symbol_names.monads[func], 'salitehl-monad')
+            }
+
+            for (const func in symbol_names.dyads) {
+                element(func, symbol_names.dyads[func], 'salitehl-dyad')
+            }
+
+            element('¬', 'Minus', 'salitehl-const')
+            element('π', 'Pi', 'salitehl-const')
+            element('∞', 'Infinity', 'salitehl-const')
+            element('ø', 'Empty', 'salitehl-const')
+            element('α', 'Alpha', 'salitehl')
+            element('ω', 'Omega', 'salitehl')
+            element('λ', 'Self Reference', 'salitehl-func')
+        }
+
+        function update() {
+            let tks = tokens(input.value)
+
+            if (tks == null) return
+
+            const output = tks.map(tk => {
+                switch (tk.kind) {
+                    case 'none': return `${tk.text}`
+                    case 'error': return `<span class='salitehl-error'>${tk.text}</span>`
+                    case 'func': return `<span class='salitehl-func'>${tk.text}</span>`
+                    case 'monad': return `<span class='salitehl-monad'>${tk.text}</span>`
+                    case 'dyad': return `<span class='salitehl-dyad'>${tk.text}</span>`
+                    case 'const': return `<span class='salitehl-const'>${tk.text}</span>`
+                    case 'string': return `<span class='salitehl-string'>${tk.text}</span>`
+                    case 'comment': return `<span class='salitehl-comment'>${tk.text}</span>`
+                }
+            }).join('')
+
+            display.innerHTML = `<span>${output}</span>`
+
+            sync_scroll()
+        }
+
+        function sync_scroll() {
+            display.scrollTop = input.scrollTop;
+            display.scrollLeft = input.scrollLeft;
+        }
+
+        function run_code() {
+            try {
+                let result = run(input.value, {})
+    
+                output.innerText = pretty_value(result)
+            } catch (e) {
+                if (typeof e == 'string') {
+                    output.innerText = String(e)
+                } else {
+                    output.innerText = e.message
+                    throw e
+                }
+            }
+        }
+
+        function editor_auto_bracket(e, left, right) {
+            if (e.key == right && input.selectionStart == input.selectionEnd) {
+                if (input.value.slice(input.selectionStart, input.selectionStart + 1) == right) {
+                    e.preventDefault()
+                    input.selectionStart += 1
+                    input.selectionEnd = input.selectionStart
+                    update()
+                    return true        
+                }
+            }
+            
+            if (e.key != left) {
+                return false
+            }
+
+            if (input.selectionStart == input.selectionEnd) {
+                const front = input.value.slice(input.selectionStart, input.selectionStart + 1).trim()
+
+                if (front != right && front.length != 0) return false
+            }
+
+            e.preventDefault()
+            const start = input.selectionStart
+            input.value = input.value.slice(0, start) + left + input.value.slice(start, input.selectionEnd) + right + input.value.slice(input.selectionEnd)
+            input.selectionStart = start + 1
+            input.selectionEnd = start + 1
+            update()
+            return true
+        }
+        
+        input.addEventListener('input', update)
+
+        input.addEventListener('scroll', sync_scroll)
+
+        input.addEventListener('keydown', (e) => {
+            
+            if (editor_auto_bracket(e, '(', ')')) { return }
+            if (editor_auto_bracket(e, '[', ']')) { return }
+            if (editor_auto_bracket(e, '{', '}')) { return }
+
+
+            if (e.key == 'Enter' && e.shiftKey) {
+                e.preventDefault()
+                run_code()
+                return
+            }
+
+            if (e.key != 'Tab') return
+
+            e.preventDefault()
+
+            const end = input.selectionStart
+            const start = end - 2
+
+            if (end < 0) return
+
+            const overstrike = input.value.slice(start, end)
+
+            const symbol = (() => {switch (overstrike) {
+                case '<_': return '≤'
+                case '>_': return '≥'
+                case '=/': return '≠'
+                case '--': return '¬'
+                case '-/': return '√'
+                case 'o|': return 'φ'
+                case 'o/': return 'ø'
+                case 'c|': return '¢'
+                case '->': return '→'
+                case '<-': return '←'
+                case '|^': return '↑'
+                case '-|': return '⊣'
+                case '|-': return '⊢'
+                case '::': return '¨'
+                case '..': return '•'
+                case '``': return '´'
+                case '/\\': return '∧'
+                case '\\/': return '∨'
+                case '8_': return '∞'
+                case 'pi': return 'π'
+                case 'ox': return '¤'
+                case 'aa': return 'α'
+                case 'bb': return 'β'
+                // case 'cc': return ''
+                case 'dd': return 'δ'
+                case 'ee': return 'ε'
+                // case 'ff': return ''
+                // case 'gg': return 'γ'
+                // case 'hh': return 'η'
+                case 'ii': return 'ι'
+                // case 'jj': return ''
+                // case 'kk': return ''
+                case 'll': return 'λ'
+                // case 'mm': return ''
+                // case 'nn': return ''
+                case 'oo': return '°'
+                case 'pp': return 'ρ'
+                // case 'qq': return ''
+                // case 'rr': return ''
+                case 'ss': return '§'
+                // case 'tt': return ''
+                case 'uu': return 'μ'
+                // case 'vv': return ''
+                case 'ww': return 'ω'
+                case 'xx': return '×'
+                // case 'yy': return ''
+                // case 'zz': return ''
+                default: return null
+            }})()
+
+            if (symbol == null) return
+            input.value = input.value.slice(0, start) + symbol + input.value.slice(end)
+
+            input.selectionStart = start + 1
+            input.selectionEnd = start + 1
+
+            update()
+        })
+
+        init()
+    </script>
+</body>
+</html>
