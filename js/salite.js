@@ -168,6 +168,7 @@ class MultiArray {
     reshape(shape) {
         const length = Math.floor(shape.reduce((a, b)=>a * b
         , 1));
+        if (isNaN(length)) throw "Length Error";
         if (length < 0) throw "Length Error";
         if (length > this._data.length) {
             let times = Math.floor(length / this._data.length);
@@ -253,369 +254,142 @@ class MultiArray {
         ], new_data);
     }
 }
-function fromMultiArray(m) {
-    switch(typeof m._data[0]){
-        case "number":
-            return {
-                kind: 'num',
-                value: m
-            };
-        case "string":
-            return {
-                kind: 'char',
-                value: m
-            };
-        case "object":
-            return {
-                kind: 'box',
-                value: m
-            };
-        default:
-            return {
-                kind: 'box',
-                value: new MultiArray([], [])
-            };
-    }
+function makeScalar(v) {
+    return new MultiArray([], [
+        v
+    ]);
 }
-function fromMultiArrayUnwrap(m) {
-    switch(typeof m._data[0]){
-        case "number":
-            return {
-                kind: 'num',
-                value: m
-            };
-        case "string":
-            return {
-                kind: 'char',
-                value: m
-            };
-        case "object":
-            if (m.rank == 0) return m._data[0] ?? makeEmpty();
-            return {
-                kind: 'box',
-                value: m
-            };
-        default:
-            return {
-                kind: 'box',
-                value: new MultiArray([], [])
-            };
-    }
-}
-function makeChar(ch) {
-    return {
-        kind: 'char',
-        value: new MultiArray([], [
-            ch
-        ])
-    };
-}
-function makeScalar(n) {
-    return {
-        kind: 'num',
-        value: new MultiArray([], [
-            n
-        ])
-    };
-}
-function chooseScalar(v) {
-    switch(typeof v){
-        case "number":
-            return {
-                kind: 'num',
-                value: new MultiArray([], [
-                    v
-                ])
-            };
-        case "string":
-            return {
-                kind: 'char',
-                value: new MultiArray([], [
-                    v
-                ])
-            };
-        case "object":
-            return v;
-        default:
-            throw "Really Bad Error";
-    }
-}
-function makeArray(arr, empty = 'box') {
+function makeArray(arr) {
     if (arr.length == 0) {
-        return {
-            kind: empty,
-            value: new MultiArray([], [])
-        };
+        return new MultiArray([], []);
     }
-    switch(typeof arr[0]){
-        case "number":
-            return {
-                kind: 'num',
-                value: new MultiArray([
-                    arr.length
-                ], arr)
-            };
-        case "string":
-            return {
-                kind: 'char',
-                value: new MultiArray([
-                    arr.length
-                ], arr)
-            };
-        case "object":
-            return {
-                kind: 'box',
-                value: new MultiArray([
-                    arr.length
-                ], arr)
-            };
-    }
+    return new MultiArray([
+        arr.length
+    ], arr);
 }
-function makeEmpty(kind = 'box') {
-    return {
-        kind: kind,
-        value: new MultiArray([], [])
-    };
+function makeEmpty() {
+    return new MultiArray([], []);
 }
 function makeString(str) {
     const a = Array.from(str);
-    return {
-        kind: 'char',
-        value: new MultiArray([
-            a.length
-        ], a)
-    };
-}
-function throwErr(err) {
-    return (_)=>{
-        throw new Error(err);
-    };
+    return new MultiArray([
+        a.length
+    ], a);
 }
 function makeArithPrefix(num) {
     const rec = (x)=>{
-        switch(x.kind){
-            case "num":
-                return num(x.value);
-            case "char":
-                return throwErr("Domain Error")(x);
-            case "box":
-                return fromMultiArray(x.value.map(makeArithPrefix(num)));
-        }
+        return x.map((w)=>{
+            switch(typeof w){
+                case "number":
+                    return num(w);
+                case "string":
+                    throw "Domain Error";
+                case "object":
+                    return rec(w);
+            }
+        });
     };
     return rec;
 }
 function makeArithInfix(num) {
     const rec = (x, y)=>{
-        if (x.kind != y.kind) return throwErr(`Domain Error: ${x.kind} ≠ ${y.kind}`)(x);
-        switch(x.kind){
-            case "num":
-                return fromMultiArray(MultiArray.zip(x.value, y.value, num));
-            case "char":
-                return throwErr("Domain Error")(x);
-            case "box":
-                return fromMultiArray(MultiArray.zip(x.value, y.value, makeArithInfix(num)));
-        }
+        return MultiArray.zip(x, y, (a, b)=>{
+            let s = typeof a;
+            let t = typeof b;
+            if (s === 'string' || t === 'string') throw "Invalid type character at arithmetic function";
+            if (s === 'number' && t === 'number') return num(a, b);
+            let c = makeBox(a);
+            let d = makeBox(b);
+            return rec(c, d);
+        });
     };
     return rec;
 }
-function makeSameKind(f) {
-    return (x, y)=>{
-        if (x.kind != y.kind) return throwErr("Domain Error")(x);
-        return fromMultiArray(f(x.value, y.value));
-    };
-}
 const add = makeArithInfix((x, y)=>x + y
 );
-const neg = makeArithPrefix((v)=>fromMultiArray(v.map((x)=>-x
-    ))
+const neg = makeArithPrefix((x)=>-x
 );
 const sub = makeArithInfix((x, y)=>x - y
 );
-const sign = makeArithPrefix((v)=>fromMultiArray(v.map((x)=>Math.sign(x)
-    ))
-);
+const sign = makeArithPrefix(Math.sign);
 const mult = makeArithInfix((x, y)=>x * y
 );
-const recp = makeArithPrefix((v)=>fromMultiArray(v.map((x)=>1 / x
-    ))
+const recp = makeArithPrefix((x)=>1 / x
 );
 const div = makeArithInfix((x, y)=>x / y
 );
-const exp = makeArithPrefix((v)=>fromMultiArray(v.map((x)=>Math.exp(x)
-    ))
-);
+const exp = makeArithPrefix(Math.exp);
 const pow = makeArithInfix((x, y)=>x ** y
 );
-const ln = makeArithPrefix((v)=>fromMultiArray(v.map((x)=>Math.log(x)
-    ))
-);
+const ln = makeArithPrefix(Math.log);
 const root = makeArithInfix((x, y)=>y ** (1 / x)
 );
-const sqrt = makeArithPrefix((v)=>fromMultiArray(v.map((x)=>Math.sqrt(x)
-    ))
-);
+const sqrt = makeArithPrefix(Math.sqrt);
 const log = makeArithInfix((x, y)=>Math.log(y) / Math.log(x)
 );
-const abs = makeArithPrefix((v)=>fromMultiArray(v.map((x)=>Math.abs(x)
-    ))
-);
+const abs = makeArithPrefix(Math.abs);
 const mod = makeArithInfix((x, y)=>x == 0 ? y : y % x
 );
-const floor = makeArithPrefix((v)=>fromMultiArray(v.map((x)=>Math.floor(x)
-    ))
-);
+const floor = makeArithPrefix(Math.floor);
 const min = makeArithInfix((x, y)=>Math.min(x, y)
 );
-const ceil = makeArithPrefix((v)=>fromMultiArray(v.map((x)=>Math.ceil(x)
-    ))
-);
+const ceil = makeArithPrefix(Math.ceil);
 const max = makeArithInfix((x, y)=>Math.max(x, y)
 );
 const and = makeArithInfix((x, y)=>x & y
 );
 const or = makeArithInfix((x, y)=>x | y
 );
-const not = makeArithPrefix((v)=>fromMultiArray(v.map((x)=>1 - x
-    ))
+const not = makeArithPrefix((x)=>1 - x
 );
 const length = (x)=>{
-    if (x.value._data.length == 0) return makeScalar(0);
-    return makeScalar(x.value._shape[0] ?? 1);
+    if (x._data.length == 0) return makeScalar(0);
+    return makeScalar(x._shape[0] ?? 1);
 };
-const rank = (x)=>makeScalar(x.value._shape.length)
+const rank = (x)=>makeScalar(x._shape.length)
 ;
-const shape2 = (x)=>makeArray(x.value._shape)
+const shape2 = (x)=>makeArray(x._shape)
 ;
-const count = (x)=>makeScalar(x.value._data.length)
+const count = (x)=>makeScalar(x._data.length)
 ;
+function cmp_scalar_le(x, y) {
+    let s = typeof x, t = typeof y;
+    return +(s != t ? s <= t : x <= y);
+}
+function cmp_scalar_ge(x, y) {
+    let s = typeof x, t = typeof y;
+    return +(s != t ? s >= t : x >= y);
+}
+function cmp_scalar_eq(x, y) {
+    let s = typeof x, t = typeof y;
+    if (s != t) return 0;
+    if (s == 'object') return +match_values(x, y);
+    return +(x == y);
+}
 const cmp_lt = (x, y)=>{
-    if (x.kind != y.kind) return throwErr("Domain Error")(x);
-    if (x.value.rank != y.value.rank) return throwErr("Rank Error")(x);
-    switch(x.kind){
-        case "num":
-            return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+(x1 < y1)
-            ));
-        case "char":
-            {
-                if (x.value.rank == 1) {
-                    return makeScalar(+(x.value._data.join('') < y.value._data.join('')));
-                }
-                return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+(x1 < y1)
-                ));
-            }
-        case "box":
-            {
-                return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>cmp_lt(x1, y1)
-                ));
-            }
-    }
+    return MultiArray.zip(x, y, (x1, y1)=>1 - cmp_scalar_ge(x1, y1)
+    );
 };
 const cmp_le = (x, y)=>{
-    if (x.kind != y.kind) return throwErr("Domain Error")(x);
-    if (x.value.rank != y.value.rank) return throwErr("Rank Error")(x);
-    switch(x.kind){
-        case "num":
-            return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+(x1 <= y1)
-            ));
-        case "char":
-            {
-                if (x.value.rank == 1) {
-                    return makeScalar(+(x.value._data.join('') <= y.value._data.join('')));
-                }
-                return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+(x1 <= y1)
-                ));
-            }
-        case "box":
-            {
-                return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>cmp_le(x1, y1)
-                ));
-            }
-    }
+    return MultiArray.zip(x, y, cmp_scalar_le);
 };
 const cmp_ge = (x, y)=>{
-    if (x.kind != y.kind) return throwErr("Domain Error")(x);
-    if (x.value.rank != y.value.rank) return throwErr("Rank Error")(x);
-    switch(x.kind){
-        case "num":
-            return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+(x1 >= y1)
-            ));
-        case "char":
-            {
-                if (x.value.rank == 1) {
-                    return makeScalar(+(x.value._data.join('') >= y.value._data.join('')));
-                }
-                return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+(x1 >= y1)
-                ));
-            }
-        case "box":
-            {
-                return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>cmp_ge(x1, y1)
-                ));
-            }
-    }
+    return MultiArray.zip(x, y, cmp_scalar_ge);
 };
 const cmp_gt = (x, y)=>{
-    if (x.kind != y.kind) return throwErr("Domain Error")(x);
-    if (x.value.rank != y.value.rank) return throwErr("Rank Error")(x);
-    switch(x.kind){
-        case "num":
-            return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+(x1 > y1)
-            ));
-        case "char":
-            {
-                if (x.value.rank == 1) {
-                    return makeScalar(+(x.value._data.join('') > y.value._data.join('')));
-                }
-                return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+(x1 > y1)
-                ));
-            }
-        case "box":
-            {
-                return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>cmp_gt(x1, y1)
-                ));
-            }
-    }
+    return MultiArray.zip(x, y, (x1, y1)=>1 - cmp_scalar_le(x1, y1)
+    );
 };
 const cmp_eq = (x, y)=>{
-    if (x.kind != y.kind) return throwErr("Domain Error")(x);
-    switch(x.kind){
-        case "num":
-            return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+(x1 == y1)
-            ));
-        case "char":
-            return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+(x1 == y1)
-            ));
-        case "box":
-            return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+match_values(x1, y1)
-            ));
-    }
+    return MultiArray.zip(x, y, cmp_scalar_eq);
 };
 const cmp_ne = (x, y)=>{
-    if (x.kind != y.kind) return throwErr("Domain Error")(x);
-    switch(x.kind){
-        case "num":
-            return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+(x1 != y1)
-            ));
-        case "char":
-            return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+(x1 != y1)
-            ));
-        case "box":
-            return fromMultiArray(MultiArray.zip(x.value, y.value, (x1, y1)=>+!match_values(x1, y1)
-            ));
-    }
+    return MultiArray.zip(x, y, (x1, y1)=>1 - cmp_scalar_eq(x1, y1)
+    );
 };
 function match_values(a, b) {
-    if (a.kind != b.kind) return false;
-    switch(a.kind){
-        case 'num':
-            return a.value.match(b.value, (x, y)=>x == y
-            );
-        case 'char':
-            return a.value.match(b.value, (x, y)=>x == y
-            );
-        case 'box':
-            return a.value.match(b.value, match_values);
-    }
+    return a.match(b, (x, y)=>!cmp_scalar_eq(x, y)
+    );
 }
 const match = (x, y)=>makeScalar(+match_values(x, y))
 ;
@@ -628,265 +402,177 @@ const left = (x, y)=>x
 const right = (x, y)=>y
 ;
 const join = (x, y)=>{
-    if (x.value._data.length == 0) return y;
-    if (y.value._data.length == 0) return x;
-    return makeSameKind((x1, y1)=>x1.concat(y1)
-    )(x, y);
+    if (x._data.length == 0) return y;
+    if (y._data.length == 0) return x;
+    return x.concat(y);
 };
 const couple = (x, y)=>{
-    if (x.kind == y.kind) {
-        return fromMultiArray(x.value.couple(y.value));
-    }
-    if (!MultiArray.same_shape(x.value, y.value)) throw "Shape Error";
-    const a = x.value.firstAxisToArray().map((slice)=>fromMultiArrayUnwrap(x.value.slice(slice))
-    );
-    const b = y.value.firstAxisToArray().map((slice)=>fromMultiArrayUnwrap(y.value.slice(slice))
-    );
-    return fromMultiArray(new MultiArray([
-        2,
-        ...x.value._shape
-    ], a.concat(b)));
+    return x.couple(y);
 };
-const deshape = (x)=>({
-        kind: x.kind,
-        value: x.value.deshape()
-    })
+const deshape = (x)=>x.deshape()
 ;
 const reshape = (x, y)=>{
-    if (x.kind != 'num') throw "Domain Error";
-    return {
-        kind: y.kind,
-        value: y.value.reshape(x.value._data)
-    };
+    if (x.rank > 1) throw "Rank Error";
+    let shape3 = x._data.map(Number);
+    return y.reshape(shape3);
 };
 const iota = (x)=>{
-    if (x.kind != 'num') throw "Domain Error";
-    const length1 = Math.floor(x.value._data.reduce((a, b)=>a * b
+    if (x.rank > 1) throw "Rank Error";
+    let shape3 = x._data.map(Number);
+    const length1 = Math.floor(shape3.reduce((a, b)=>a * b
     ));
+    if (isNaN(length1)) throw "Length Error";
     if (length1 < 0) throw "Length Error";
-    if (length1 == 0) return makeEmpty('num');
+    if (length1 == 0) return makeEmpty();
     const data1 = Array(length1).fill(0).map((_, i)=>i
     );
-    return {
-        kind: 'num',
-        value: new MultiArray(x.value._data, data1).reshape(x.value._data)
-    };
+    return new MultiArray(shape3, data1).reshape(shape3);
 };
+function takeScalar(x) {
+    if (x.rank != 0) throw "Rank Error";
+    const n = x._data[0];
+    if (typeof n != 'number') throw "Domain Error";
+    return n;
+}
+function takeNumbers(x) {
+    if (x.rank != 1) throw "Rank Error";
+    const n = x._data.map(Number);
+    if (n.some(isNaN)) throw "Domain Error";
+    return n;
+}
 const reverse = (v)=>{
-    if (v.value.rank == 0) return v;
-    const slices = v.value.firstAxisToArray();
-    const __final = v.value.select(slices.reverse());
-    return {
-        kind: v.kind,
-        value: __final
-    };
+    if (v.rank == 0) return v;
+    const slices = v.firstAxisToArray();
+    return v.select(slices.reverse());
 };
 const rotate = (x, y)=>{
-    if (x.kind != 'num') throw "Domain Error";
-    if (x.value.rank != 0) throw "Rank Error";
-    const n = x.value._data[0];
-    if (y.value.rank == 0) return y;
+    const n = takeScalar(x);
+    if (y.rank == 0) return y;
+    const slices = y.firstAxisToArray();
+    let rotated_slices;
     if (n > 0) {
-        const slices = y.value.firstAxisToArray();
         const removed = slices.splice(0, n % slices.length);
-        const rotated_slices = [
+        rotated_slices = [
             ...slices,
             ...removed
         ];
-        const rotated = y.value.select(rotated_slices);
-        return {
-            kind: y.kind,
-            value: rotated
-        };
     } else {
-        const slices = y.value.firstAxisToArray();
         const removed = slices.splice(0, (slices.length + n) % slices.length);
-        const rotated_slices = [
+        rotated_slices = [
             ...slices,
             ...removed
         ];
-        const rotated = y.value.select(rotated_slices);
-        return {
-            kind: y.kind,
-            value: rotated
-        };
     }
+    const rotated = y.select(rotated_slices);
+    return rotated;
 };
 const take = (x, y)=>{
-    if (x.kind != 'num') throw "Domain Error";
-    const n = x.value._data[0];
-    const slices = y.value.firstAxisToArray();
+    const n = takeScalar(x);
+    const slices = y.firstAxisToArray();
     if (n > 0) {
-        const __final = y.value.select(slices.slice(0, n));
-        return {
-            kind: y.kind,
-            value: __final
-        };
+        return y.select(slices.slice(0, n));
     }
-    const __final = y.value.select(slices.slice(slices.length + n));
-    return {
-        kind: y.kind,
-        value: __final
-    };
+    return y.select(slices.slice(slices.length + n));
 };
 const drop = (x, y)=>{
-    if (x.kind != 'num') throw "Domain Error";
-    const n = x.value._data[0];
-    const slices = y.value.firstAxisToArray();
+    const n = takeScalar(x);
+    const slices = y.firstAxisToArray();
     if (n > 0) {
-        const __final = y.value.select(slices.slice(n));
-        return {
-            kind: y.kind,
-            value: __final
-        };
+        return y.select(slices.slice(n));
     }
-    const __final = y.value.select(slices.slice(0, n));
-    return {
-        kind: y.kind,
-        value: __final
-    };
+    return y.select(slices.slice(0, n));
 };
 const first = (x)=>{
-    const val = chooseScalar(x.value._data[0]);
-    return val;
+    if (!x._data[0]) return makeEmpty();
+    return makeScalar(x._data[0]);
 };
 const first_cell = (y)=>{
-    const __final = y.value.getFirst(0);
-    return {
-        kind: y.kind,
-        value: y.value.slice(__final)
-    };
+    const __final = y.getFirst(0);
+    return y.slice(__final);
 };
 const pick = (x, y)=>{
-    if (x.kind == 'box') {
-        const result = x.value.map((i)=>pick(i, y).value._data[0]
+    if (x.rank == 0) {
+        const n = takeScalar(x);
+        return makeScalar(y._data[n]);
+    }
+    try {
+        let n = takeNumbers(x);
+        return makeScalar(y.get(n));
+    } catch  {
+        const result = x.map((i)=>pick(makeScalar(i), y)._data[0]
         );
-        return {
-            kind: y.kind,
-            value: result
-        };
+        return result;
     }
-    if (x.kind != 'num') throw "Domain Error";
-    if (x.value.rank == 0) {
-        const val = y.value._data[x.value._data[0]];
-        return chooseScalar(val);
-    }
-    const val = y.value.get(x.value._data);
-    return chooseScalar(val);
 };
 const select = (x, y)=>{
-    if (x.kind != 'num') throw "Domain Error";
-    if (y.value.rank == 0) throw "Rank Error";
-    if (x.value.rank == 0) {
-        const slice = y.value.getFirst(x.value._data[0] ?? 0);
-        return {
-            kind: y.kind,
-            value: y.value.slice(slice)
-        };
+    if (y.rank == 0) throw "Rank Error";
+    if (x.rank == 0) {
+        let n = takeScalar(x);
+        const slice = y.getFirst(n ?? 0);
+        return y.slice(slice);
     }
-    if (x.value.rank != 1) throw "Rank Error";
-    const slices = x.value._data.map((i)=>y.value.getFirst(i)
+    let n = takeNumbers(x);
+    const slices = n.map((i)=>y.getFirst(i)
     );
-    return {
-        kind: y.kind,
-        value: y.value.select(slices)
-    };
+    return y.select(slices);
 };
 const membership = (y, x)=>{
-    if (x.kind != y.kind) throw "Domain Error";
-    const __final = y.value.map((a)=>{
-        for (const val of x.value._data){
-            if (val == a) return 1;
+    const __final = y.map((a)=>{
+        for (const val of x._data){
+            if (cmp_scalar_eq(val, a)) return 1;
         }
         return 0;
     });
-    return {
-        kind: 'num',
-        value: __final
-    };
+    return __final;
 };
 const indexof = (x, y)=>{
-    if (x.kind != y.kind) throw "Domain Error";
-    const __final = y.value.map((a)=>{
-        for(let i = 0; i < x.value._data.length; ++i){
-            if (x.value._data[i] == a) return i;
+    const __final = y.map((a)=>{
+        for(let i = 0; i < x._data.length; ++i){
+            if (cmp_scalar_eq(x._data[i], a)) return i;
         }
-        return x.value._data.length;
+        return x._data.length;
     });
-    return {
-        kind: 'num',
-        value: __final
-    };
+    return __final;
 };
 const indices = (x)=>{
-    if (x.kind != 'num') throw "Domain Error";
-    if (x.value.rank != 1) throw "Shape Error";
-    const data1 = x.value._data.flatMap((n, i)=>Array(n).fill(i)
+    const n = takeNumbers(x);
+    const data1 = n.flatMap((n1, i)=>Array(n1).fill(i)
     );
     return makeArray(data1);
 };
 const replicate = (x, y)=>{
-    if (x.kind != 'num') throw "Domain Error";
-    if (x.value.rank != 1) throw "Shape Error";
-    const indices_list = x.value._data;
-    if (y.value.length !== indices_list.length) throw "Lenght Error";
+    const indices_list = takeNumbers(x);
+    if (y.length !== indices_list.length) throw "Lenght Error";
     const indices1 = indices_list.flatMap((n, i)=>Array(n).fill(i)
     );
-    const slices = indices1.map((i)=>y.value.getFirst(i)
+    const slices = indices1.map((i)=>y.getFirst(i)
     );
-    const __final = y.value.select(slices);
-    return {
-        kind: y.kind,
-        value: __final
-    };
+    return y.select(slices);
 };
 const mark_firsts = (x)=>{
-    if (x.value.rank != 1) throw "Shape Error";
+    if (x.rank != 1) throw "Shape Error";
     const uniques = new Set();
-    const data1 = x.value.map((n)=>uniques.has(n) ? 0 : (uniques.add(n), 1)
+    const data1 = x.map((n)=>uniques.has(n) ? 0 : (uniques.add(n), 1)
     );
-    return {
-        kind: 'num',
-        value: data1
-    };
+    return data1;
 };
 const unique = (x)=>{
-    if (x.value.rank != 1) throw "Shape Error";
-    switch(x.kind){
-        case 'num':
-            {
-                const uniques = new Set();
-                const data1 = x.value._data.filter((n)=>uniques.has(n) ? false : (uniques.add(n), true)
-                );
-                return makeArray(data1);
-            }
-        case 'char':
-            {
-                const uniques = new Set();
-                const data1 = x.value._data.filter((n)=>uniques.has(n) ? false : (uniques.add(n), true)
-                );
-                return makeArray(data1);
-            }
-        case 'box':
-            {
-                const uniques = [];
-                const has = (v)=>uniques.some((u)=>match_values(u, v)
-                    )
-                ;
-                const data1 = x.value._data.filter((n)=>has(n) ? false : (uniques.push(n), true)
-                );
-                return makeArray(data1);
-            }
-    }
+    if (x.rank != 1) throw "Shape Error";
+    const uniques = [];
+    const has = (v)=>uniques.some((u)=>cmp_scalar_eq(u, v)
+        )
+    ;
+    const data1 = x._data.filter((n)=>has(n) ? false : (uniques.push(n), true)
+    );
+    return makeArray(data1);
 };
 const group = (x, y)=>{
-    if (x.kind != 'num') throw "Domain Error";
-    if (x.value.rank != 1) throw "Shape Error";
+    const groups = takeNumbers(x);
     let data1 = [];
-    for(let i = 0; i < x.value._data.length; i++){
-        const n = x.value._data[i];
+    for(let i = 0; i < groups.length; i++){
+        const n = groups[i];
         if (n < 0) continue;
-        const slice = y.value.getFirst(i);
+        const slice = y.getFirst(i);
         if (data1[n] == undefined) {
             data1[n] = [
                 slice
@@ -899,23 +585,16 @@ const group = (x, y)=>{
     for(let i1 = 0; i1 < data1.length; i1++){
         if (data1[i1] == undefined) data1[i1] = [];
     }
-    const boxes = data1.map((slices)=>({
-            kind: y.kind,
-            value: y.value.select(slices)
-        })
+    const boxes = data1.map((slices)=>y.select(slices)
     );
-    return {
-        kind: 'box',
-        value: new MultiArray([
-            data1.length
-        ], boxes)
-    };
+    return new MultiArray([
+        data1.length
+    ], boxes);
 };
 const group_indices = (x)=>{
-    if (x.kind != 'num') throw "Domain Error";
-    if (x.value.rank != 1) throw "Shape Error";
+    const groups = takeNumbers(x);
     const data1 = [];
-    x.value._data.forEach((n, i)=>{
+    groups.forEach((n, i)=>{
         if (n < 0) return;
         if (data1[n] == undefined) data1[n] = [];
         data1[n].push(i);
@@ -927,14 +606,13 @@ const group_indices = (x)=>{
     ));
 };
 const find = (pat, x)=>{
-    if (pat.kind != x.kind) throw "Domain Error";
-    if (x.value.rank == 0) throw "Rank Error";
-    if (pat.value.rank == 0) {
+    if (x.rank == 0) throw "Rank Error";
+    if (pat.rank == 0) {
         return cmp_eq(pat, x);
     }
-    if (pat.value.rank != x.value.rank) throw "Rank Error";
-    const pat_len = pat.value.length ?? 0;
-    const x_len = x.value.length ?? 0;
+    if (pat.rank != x.rank) throw "Rank Error";
+    const pat_len = pat.length ?? 0;
+    const x_len = x.length ?? 0;
     if (pat_len > x_len) return makeEmpty();
     if (pat_len == x_len) {
         if (match_values(pat, x)) {
@@ -945,14 +623,14 @@ const find = (pat, x)=>{
             return makeArray(new Array(x_len).fill(0));
         }
     }
-    const pat_cells = pat.value.firstAxisToArray();
-    const cells = x.value.firstAxisToArray();
+    const pat_cells = pat.firstAxisToArray();
+    const cells = x.firstAxisToArray();
     const result = new Array(x_len).fill(0);
     for(let i = 0; i < x_len - pat_len; i++){
         let got = 1;
         for(let j = 0; j < pat_cells.length; j++){
-            const pat_c = fromMultiArray(pat.value.slice(pat_cells[j]));
-            const x_c = fromMultiArray(x.value.slice(cells[i + j]));
+            const pat_c = pat.slice(pat_cells[j]);
+            const x_c = x.slice(cells[i + j]);
             if (false == match_values(pat_c, x_c)) {
                 got = 0;
                 break;
@@ -963,38 +641,39 @@ const find = (pat, x)=>{
     return makeArray(result);
 };
 const enclose = (x)=>{
-    return {
-        kind: 'box',
-        value: new MultiArray([], [
-            x
-        ])
-    };
+    return new MultiArray([], [
+        x
+    ]);
 };
+function makeBox(v) {
+    return typeof v == 'object' ? v : makeScalar(v);
+}
+function unwrapBox(v) {
+    if (v.rank == 0) return v._data[0];
+    return v;
+}
 const merge = (x)=>{
-    if (x.kind != "box") throw "Domain Error";
-    let first1 = x.value._data[0];
-    const result = x.value._data.reduce((acc, v)=>{
-        if (acc.kind != v.kind) throw "Domain Error";
-        if (!MultiArray.same_shape(first1.value, v.value)) throw "Shape Error";
-        return fromMultiArray(acc.value.concat(v.value));
+    if (x.rank == 0) return x;
+    let first1 = makeBox(x._data[0]);
+    const result = x._data.map(makeBox).reduce((acc, v)=>{
+        if (!MultiArray.same_shape(first1, v)) throw "Shape Error";
+        return acc.concat(v);
     });
-    return fromMultiArray(result.value.reshape([
-        ...x.value._shape,
-        ...first1.value._shape
-    ]));
+    return result.reshape([
+        ...x._shape,
+        ...first1._shape
+    ]);
 };
 const windows = (n, x)=>{
-    if (n.kind != "num") throw "Domain Error";
-    if (n.value.rank != 0) throw "Rank Error";
-    if (x.value.rank == 0) throw "Rank Error";
-    const len = n.value._data[0];
+    if (x.rank == 0) return x;
+    const len = takeScalar(n);
     if (len <= 0) throw "Value Error";
-    if (len >= x.value._shape[0]) throw "Value Error";
+    if (len >= x._shape[0]) throw "Value Error";
     let windows1 = [];
-    const span = x.value._shape[0] - len + 1;
+    const span = x._shape[0] - len + 1;
     for(let i = 0; i < span; i++){
-        let a = x.value.getFirst(i);
-        let b = x.value.getFirst(i + len - 1);
+        let a = x.getFirst(i);
+        let b = x.getFirst(i + len - 1);
         windows1.push({
             start: a.start,
             end: b.end,
@@ -1007,132 +686,60 @@ const windows = (n, x)=>{
     let data1 = [];
     for(let i1 = 0; i1 < windows1.length; i1++){
         const slice = windows1[i1];
-        data1 = data1.concat(x.value._data.slice(slice.start, slice.end));
+        data1 = data1.concat(x._data.slice(slice.start, slice.end));
     }
-    return {
-        kind: x.kind,
-        value: new MultiArray([
-            windows1.length,
-            ...windows1[0].shape
-        ], data1)
-    };
+    return new MultiArray([
+        windows1.length,
+        ...windows1[0].shape
+    ], data1);
 };
 const solo = (x)=>{
-    return {
-        kind: x.kind,
-        value: x.value.reshape([
-            1,
-            ...x.value._shape
-        ])
-    };
+    return x.reshape([
+        1,
+        ...x._shape
+    ]);
 };
+function scalar_depth(v) {
+    let s = typeof v;
+    if (s == 'object') return value_depth(v);
+    return 0;
+}
 function value_depth(v) {
-    if (v.kind != 'box') return 0;
-    return 1 + Math.max(...v.value._data.map(value_depth));
+    if (v.rank == 0) return 0;
+    return 1 + Math.max(...v._data.map(scalar_depth));
 }
 const depth = (x)=>{
     return makeScalar(value_depth(x));
 };
 function compare_values(a, b) {
-    const gt = cmp_gt(a, b);
-    if (gt.kind != 'num') throw "Domain Error compare" + gt.kind;
-    if (gt.value.rank != 0) throw "Rank Error";
-    if (gt.value._data[0] != 0) return 1;
-    const lt = cmp_lt(a, b);
-    if (lt.kind != 'num') throw "Domain Error compare";
-    if (lt.value.rank != 0) throw "Rank Error";
-    if (lt.value._data[0] != 0) return -1;
+    if (!cmp_scalar_le(a, b)) return 1;
+    if (!cmp_scalar_ge(a, b)) return -1;
     return 0;
 }
 const grade_up = (x)=>{
-    const slices = x.value.firstAxisToArray();
-    const sliced = slices.map((s)=>x.value.slice(s)
+    const slices = x.firstAxisToArray();
+    const sliced = slices.map((s)=>x.slice(s)
     );
-    switch(x.kind){
-        case "num":
-            if (x.value.rank == 1) {
-                const indices1 = slices.map((_, i)=>i
-                ).sort((a, b)=>{
-                    return sliced[a]._data[0] - sliced[b]._data[0];
-                });
-                return makeArray(indices1);
-            }
-            throw "Rank Error";
-        case "char":
-            {
-                if (x.value.rank == 1) {
-                    const strings = sliced.map((s)=>s._data.join('')
-                    );
-                    const indices1 = slices.map((_, i)=>i
-                    ).sort((a, b)=>{
-                        if (strings[a] > strings[b]) return 1;
-                        if (strings[a] < strings[b]) return -1;
-                        return 0;
-                    });
-                    return makeArray(indices1);
-                }
-                throw "Rank Error";
-            }
-        case "box":
-            {
-                if (x.value.rank == 1) {
-                    const indices1 = slices.map((_, i)=>i
-                    ).sort((a, b)=>{
-                        return compare_values(sliced[a]._data[0], sliced[b]._data[0]);
-                    });
-                    return makeArray(indices1);
-                }
-                throw "Rank Error";
-            }
-    }
+    const indices1 = slices.map((_, i)=>i
+    ).sort((a, b)=>{
+        return compare_values(sliced[a], sliced[b]);
+    });
+    return makeArray(indices1);
 };
 const grade_down = (x)=>{
-    const slices = x.value.firstAxisToArray();
-    const sliced = slices.map((s)=>x.value.slice(s)
+    const slices = x.firstAxisToArray();
+    const sliced = slices.map((s)=>x.slice(s)
     );
-    switch(x.kind){
-        case "num":
-            if (x.value.rank == 1) {
-                const indices1 = slices.map((_, i)=>i
-                ).sort((a, b)=>{
-                    return (sliced[a]._data[0] - sliced[b]._data[0]) * -1;
-                });
-                return makeArray(indices1);
-            }
-            throw "Rank Error";
-        case "char":
-            {
-                if (x.value.rank == 1) {
-                    const strings = sliced.map((s)=>s._data.join('')
-                    );
-                    const indices1 = slices.map((_, i)=>i
-                    ).sort((a, b)=>{
-                        if (strings[a] > strings[b]) return -1;
-                        if (strings[a] < strings[b]) return 1;
-                        return 0;
-                    });
-                    return makeArray(indices1);
-                }
-                throw "Rank Error";
-            }
-        case "box":
-            {
-                if (x.value.rank == 1) {
-                    const indices1 = slices.map((_, i)=>i
-                    ).sort((a, b)=>{
-                        return compare_values(sliced[a]._data[0], sliced[b]._data[0]) * -1;
-                    });
-                    return makeArray(indices1);
-                }
-                throw "Rank Error";
-            }
-    }
+    const indices1 = slices.map((_, i)=>i
+    ).sort((a, b)=>{
+        return compare_values(sliced[a], sliced[b]) * -1;
+    });
+    return makeArray(indices1);
 };
 const under_indices = (x)=>{
-    if (x.kind != 'num') throw "Domain Error";
-    if (x.value.rank != 1) throw "Shape Error";
+    const indices1 = takeNumbers(x);
     const data1 = [];
-    x.value._data.forEach((n)=>{
+    indices1.forEach((n)=>{
         if (n < 0) return;
         if (data1[n] == undefined) data1[n] = 0;
         data1[n] += 1;
@@ -1142,44 +749,95 @@ const under_indices = (x)=>{
     }
     return makeArray(data1);
 };
+function underBoxPrefix(f) {
+    return (v)=>unwrapBox(f(makeBox(v)))
+    ;
+}
+function underBoxInfix(f) {
+    return (a, b)=>unwrapBox(f(makeBox(a), makeBox(b)))
+    ;
+}
 const reduce = (f)=>(w)=>{
-        if (w.value.length == undefined) return w;
-        switch(w.kind){
-            case "num":
-                const reduced = w.value.map(makeScalar).reduce(f);
-                console.log(reduced);
-                return fromMultiArray(w.value.reduce((a, b)=>{
-                    const x = makeScalar(a);
-                    const y = makeScalar(b);
-                    return f(x, y).value._data[0];
-                }));
-            case "char":
-                return fromMultiArray(w.value.reduce((a, b)=>{
-                    const x = makeChar(a);
-                    const y = makeChar(b);
-                    return f(x, y).value._data[0];
-                }));
-            case "box":
-                return fromMultiArray(w.value.reduce(f));
-        }
+        if (w.length == undefined) return w;
+        const result = w.map(makeBox).reduce(f);
+        if (result.rank == 0) return result._data[0];
+        return result;
     }
 ;
-{
-    const a = MultiArray.from([
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-    ]).reshape([
-        2,
-        3
-    ]);
-    const r = a.reduce((a1, b)=>a1 + b
-    );
-    console.log(r);
-}var TokenType;
+const each = (f)=>(w)=>{
+        let data1 = [];
+        for(let index = 0; index < w._data.length; index++){
+            const result = underBoxPrefix(f)(w._data[index]);
+            data1.push(result);
+        }
+        return new MultiArray(w._shape, data1, w._strides);
+    }
+;
+const cellsPrefix = (f)=>(w)=>{
+        const cells = w.firstAxisToArray();
+        let data1 = [];
+        let shape3 = null;
+        for (const slice of cells){
+            const cell = f(w.slice(slice));
+            if (shape3 == null) {
+                shape3 = cell._shape;
+            } else if (cell._shape.length != shape3.length || !cell._shape.every((n, i)=>n == shape3[i]
+            )) {
+                throw "Shape Error";
+            }
+            data1 = data1.concat(cell._data);
+        }
+        if (w.length == undefined || shape3 == null) return makeEmpty();
+        return new MultiArray([
+            w.length,
+            ...shape3
+        ], data1);
+    }
+;
+const cellsInfix = (f)=>(a, w)=>{
+        if (a.length != w.length) throw "Length Error";
+        const a_arr = a.firstAxisToArray();
+        const w_arr = w.firstAxisToArray();
+        let data1 = [];
+        let shape3 = null;
+        for(let i = 0; i < a_arr.length; i++){
+            const x = a.slice(a_arr[i]);
+            const y = w.slice(w_arr[i]);
+            const result = f(x, y);
+            if (shape3 == null) {
+                shape3 = result._shape;
+            } else if (result._shape.length != shape3.length || !result._shape.every((n, i1)=>n == shape3[i1]
+            )) {
+                throw "Shape Error";
+            }
+            data1 = data1.concat(result._data);
+        }
+        if (shape3 == null) return makeEmpty();
+        return new MultiArray([
+            a_arr.length,
+            ...shape3
+        ], data1);
+    }
+;
+const table = (f)=>(a, w)=>{
+        const a_arr = a.firstAxisToArray();
+        const w_arr = w.firstAxisToArray();
+        let data1 = [];
+        for (const a_slice of a_arr){
+            for (const w_slice of w_arr){
+                const x = a.slice(a_slice);
+                const y = w.slice(w_slice);
+                const result = unwrapBox(f(x, y));
+                data1.push(result);
+            }
+        }
+        return new MultiArray([
+            a_arr.length,
+            w_arr.length
+        ], data1);
+    }
+;
+var TokenType;
 (function(TokenType1) {
     TokenType1[TokenType1["Func"] = 0] = "Func";
     TokenType1[TokenType1["Monad"] = 1] = "Monad";
@@ -1767,122 +1425,133 @@ function pretty_value_(v1) {
     if (v1 == undefined) return [
         'ERR'
     ];
-    if (v1.value._data.length == 0) return [
+    if (v1._data.length == 0) return [
         'ø'
     ];
-    switch(v1.kind){
-        case "num":
-            {
-                if (v1.value.rank == 0) return [
-                    `${v1.value._data[0]}`
-                ];
-                if (v1.value.rank == 1) {
+    if (v1.rank == 0) {
+        let single = v1._data[0];
+        switch(typeof single){
+            case 'number':
+                {
+                    let s = `nan`;
+                    if (isNaN(single)) return [
+                        s
+                    ];
+                    if (!isFinite(single)) s = single < 0 ? `¬∞` : `∞`;
+                    if (single < 0) return [
+                        `¬${String(-single)}`
+                    ];
                     return [
-                        `[ ${v1.value._data.map((n)=>String(n)
-                        ).join(' ')} ]`
+                        String(single)
                     ];
                 }
-                let i = 0;
-                let last = v1.value._strides[v1.value._strides.length - 2];
-                let strings = [];
-                let col_max = Array(last).fill(0);
-                while(i < v1.value._data.length){
-                    if (i != 0 && v1.value._strides.slice(0, -2).some((n)=>i % n == 0
-                    )) strings.push([
-                        ""
-                    ]);
-                    const row_string = v1.value._data.slice(i, i + last).map((n)=>String(n)
-                    );
-                    row_string.forEach((s, i1)=>{
-                        if (s.length > col_max[i1]) col_max[i1] = s.length;
-                    });
-                    strings.push(row_string);
-                    i += last;
-                }
-                const padded = strings.map((s)=>s.map((s1, i1)=>s1.padStart(col_max[i1])
-                    ).join(' ')
-                );
+            case 'string':
                 return [
-                    `┌─`.padEnd(padded[0].length + 4),
-                    `╵ ${padded[0]}`,
-                    ...padded.slice(1).map((x)=>'  ' + x
-                    ),
-                    `${' '.repeat(padded[0].length + 3)}┘`
+                    `'${single}'`
                 ];
-            }
-        case "char":
-            {
-                if (v1.value.rank == 0) return [
-                    `'${v1.value._data[0]}'`
-                ];
-                if (v1.value.rank == 1) return [
-                    `'${v1.value._data.join('')}'`
-                ];
-                let i = 0;
-                let last = v1.value._strides[v1.value._strides.length - 2];
-                let strings = [];
-                while(i < v1.value._data.length){
-                    if (i != 0 && v1.value._strides.slice(0, -2).some((n)=>i % n == 0
-                    )) strings.push("");
-                    strings.push(v1.value._data.slice(i, i + last).join(''));
-                    i += last;
-                }
-                return strings.map((s, i1)=>(i1 > 0 ? ' ' : '"') + s + (i1 == strings.length - 1 ? '"' : ' ')
-                );
-            }
-        case "box":
-            {
-                let strings = v1.value._data.map(pretty_value_);
-                let len = Math.max(...strings.map((ss)=>ss[0].length
-                ));
-                let hei = Math.max(...strings.map((ss)=>ss.length
-                ));
-                if (hei == 1 && v1.value.rank == 1) {
+            case 'object':
+                {
+                    let string = pretty_value_(makeBox(single));
+                    let len = string[0].length;
                     return [
-                        `⟨ ${strings.map((ss)=>ss.join(' ')
-                        ).join(' ')} ⟩`
-                    ];
-                }
-                if (v1.value.rank == 2 && hei == 1) {
-                    let new_strings = [];
-                    let last = v1.value._shape[1];
-                    let first1 = v1.value._shape[0];
-                    const them = strings.map((s)=>s[0].padEnd(len)
-                    );
-                    for(let i = 0; i < first1; i++){
-                        const element = them.slice(i * last, (i + 1) * last).join(' ');
-                        new_strings.push(element);
-                    }
-                    len = new_strings[0].length;
-                    return [
-                        `┌~${v1.value._shape.join(' ')}`.padEnd(len + 3),
-                        `╵ ${new_strings[0]}`,
-                        ...new_strings.slice(1).map((s)=>'  ' + s
+                        `┌`.padEnd(len + 4),
+                        `  ${string[0]}`,
+                        ...string.slice(1).map((s)=>'  ' + s
                         ),
                         `${' '.repeat(len + 3)}┘`
                     ];
                 }
-                if (v1.value.rank == 0) {
-                    return [
-                        `┌∙`.padEnd(len + 4),
-                        `╵ ${strings[0][0]}`,
-                        ...strings[0].slice(1).map((s)=>'  ' + s
-                        ),
-                        `${' '.repeat(len + 3)}┘`
-                    ];
-                }
-                return [
-                    `┌~${v1.value._shape.join(' ')}`.padEnd(len + 4),
-                    `╵ ${strings[0][0]}`,
-                    ...strings[0].slice(1).map((s)=>'  ' + s
-                    ),
-                    ...strings.slice(1).flatMap((s)=>s.map((s1)=>'  ' + s1
-                        ).join('\n')
-                    ),
-                    `${' '.repeat(len + 3)}┘`
-                ];
-            }
+        }
     }
+    if (v1._data.every((v2)=>typeof v2 == 'string'
+    )) {
+        if (v1.rank == 1) return [
+            `'${v1._data.join('')}'`
+        ];
+        let i = 0;
+        let last = v1._strides[v1._strides.length - 2];
+        let strings = [];
+        while(i < v1._data.length){
+            if (i != 0 && v1._strides.slice(0, -2).some((n)=>i % n == 0
+            )) strings.push("");
+            strings.push(v1._data.slice(i, i + last).join(''));
+            i += last;
+        }
+        return strings.map((s, i1)=>(i1 > 0 ? ' ' : '"') + s + (i1 == strings.length - 1 ? '"' : ' ')
+        );
+    }
+    let strings = v1._data.map((v2)=>pretty_value_(makeBox(v2))
+    );
+    if (v1.rank == 1) {
+        let sizes = strings.map((ss)=>[
+                ss[0].length,
+                ss.length
+            ]
+        );
+        let max_height = Math.max(...sizes.map((b)=>b[1]
+        ));
+        if (max_height == 1) return [
+            `⟨ ${strings.map((ss)=>ss.join(' ')
+            ).join(' ')} ⟩`
+        ];
+        let layers = [];
+        for(let i = 0; i < max_height; i++){
+            let layer = strings.map((ss, j)=>ss[i] ?? ' '.repeat(sizes[j][0])
+            );
+            layers.push(layer.join(' '));
+        }
+        const len = layers[0].length;
+        return [
+            `┌─`.padEnd(len + 4),
+            `│ ${layers[0]}`,
+            ...layers.slice(1).map((ss)=>'  ' + ss
+            ),
+            `${' '.repeat(len + 3)}┘`
+        ];
+    }
+    let max_hei = Math.max(...strings.map((ss)=>ss.length
+    ));
+    if (v1.rank == 2 && max_hei == 1) {
+        let i = 0;
+        let last = v1._strides[v1._strides.length - 2];
+        let strings1 = [];
+        let col_max = Array(last).fill(0);
+        while(i < v1._data.length){
+            if (i != 0 && v1._strides.slice(0, -2).some((n)=>i % n == 0
+            )) strings1.push([
+                ""
+            ]);
+            const row_string = v1._data.slice(i, i + last).map((n)=>pretty_value_(makeBox(n))[0]
+            );
+            row_string.forEach((s, i1)=>{
+                if (s.length > col_max[i1]) col_max[i1] = s.length;
+            });
+            strings1.push(row_string);
+            i += last;
+        }
+        const padded = strings1.map((s)=>s.map((s1, i1)=>s1.padStart(col_max[i1])
+            ).join(' ')
+        );
+        return [
+            `┌─`.padEnd(padded[0].length + 4),
+            `│ ${padded[0]}`,
+            ...padded.slice(1).map((x)=>'  ' + x
+            ),
+            `${' '.repeat(padded[0].length + 3)}┘`
+        ];
+    }
+    let len = Math.max(...strings.map((ss)=>ss[0].length
+    ));
+    return [
+        `┌~${v1._shape.join(' ')}`.padEnd(len + 4),
+        `╵ ${strings[0][0]}`,
+        ...strings[0].slice(1).map((s)=>'  ' + s
+        ),
+        ...strings.slice(1).flatMap((s)=>s.map((s1)=>'  ' + s1
+            ).join('\n')
+        ),
+        `${' '.repeat(len + 3)}┘`
+    ];
 }
 const builtin_functions = {
     '+': [
@@ -2029,22 +1698,14 @@ const builtin_functions = {
         null,
         drop
     ],
-    'Box': [
-        (x)=>{
-            return fromMultiArray(x.value.map(chooseScalar));
-        },
-        null
-    ],
     'δ': [
         (w)=>makeString(pretty_value1(w))
         ,
         (op, w)=>{
-            if (op.kind != 'num') throw "Domain Error";
-            let n = op.value._data[0];
+            let n = takeScalar(op);
             switch(n){
                 case 0:
-                    if (w.kind != 'num') throw "Domain Error";
-                    return makeChar(String.fromCharCode(w.value._data[0]));
+                    return makeScalar(String.fromCharCode(Number(w._data[0])));
                 default:
                     return makeString(pretty_value1(w));
             }
@@ -2052,14 +1713,11 @@ const builtin_functions = {
     ],
     ':δ': [
         (w)=>{
-            if (w.kind != 'char') throw "Domain Error";
-            return makeScalar(parseFloat(w.value._data.join('')));
+            return makeScalar(parseFloat(w._data.map(String).join('')));
         },
         (op, w)=>{
-            if (w.kind != 'char') throw "Domain Error";
-            if (op.kind != 'num') throw "Domain Error";
-            let str = w.value._data.join('');
-            let n = op.value._data[0];
+            let str = w._data.map(String).join('');
+            let n = takeScalar(op);
             switch(n){
                 case 0:
                     return makeScalar(str.charCodeAt(0));
@@ -2077,8 +1735,8 @@ const builtin_functions = {
     ],
     '!': [
         (w)=>{
-            if (w.value._data[0] == undefined) throw "Error";
-            const val = w.value._data[0];
+            if (w._data[0] == undefined) throw "Error";
+            const val = w._data[0];
             if (typeof val == 'number' && val == 0) {
                 throw "Error";
             }
@@ -2086,44 +1744,10 @@ const builtin_functions = {
         },
         null
     ],
-    'Fill': [
-        null,
-        (a, w)=>{
-            if (a.kind != 'num') throw "Domain Error";
-            if (a.value.rank != 0) throw "Rank Error";
-            const n = Math.floor(a.value._data[0]);
-            if (n < 0) throw "Lenght Error";
-            const span = w.value._shape[0] ?? 1;
-            const spanned = Math.max(n - span, 0);
-            const stride = w.value._strides[0] ?? 1;
-            const filler = new Array(spanned * stride);
-            const new_shape = [
-                n,
-                ...w.value._shape.slice(1)
-            ];
-            switch(w.kind){
-                case 'num':
-                    return {
-                        kind: 'num',
-                        value: new MultiArray(new_shape, w.value._data.concat(filler.fill(0)))
-                    };
-                case 'char':
-                    return {
-                        kind: 'char',
-                        value: new MultiArray(new_shape, w.value._data.concat(filler.fill(' ')))
-                    };
-                case 'box':
-                    return {
-                        kind: 'box',
-                        value: new MultiArray(new_shape, w.value._data.concat(filler.fill(makeEmpty())))
-                    };
-            }
-        }
-    ],
     '?': [
         null,
         (a, w)=>{
-            if (w.value._data[0] == undefined) return a;
+            if (w._data[0] == undefined) return a;
             return w;
         }
     ]
@@ -2202,12 +1826,11 @@ const builtin_functions_undo = {
     '¢': [
         (before)=>(x)=>{
                 const new_data = [
-                    ...before.value._data
+                    ...before._data
                 ];
-                if (x.kind != before.kind) throw "Domain Error";
-                if (x.value.rank != 0) throw "Rank Error";
-                new_data[0] = x.value._data[0];
-                return fromMultiArray(new MultiArray(before.value._shape, new_data, before.value._strides));
+                if (x.rank != 0) throw "Rank Error";
+                new_data[0] = x._data[0];
+                return new MultiArray(before._shape, new_data, before._strides);
             }
         ,
         null
@@ -2215,17 +1838,16 @@ const builtin_functions_undo = {
     ':¢': [
         (before)=>(x)=>{
                 const new_data = [
-                    ...before.value._data
+                    ...before._data
                 ];
-                if (x.kind != before.kind) throw "Domain Error";
-                if (x.value._shape.length != before.value._shape.length - 1) throw "Shape Error";
-                if (before.value._shape.slice(1).every((n, i)=>n == x.value._shape[i]
+                if (x._shape.length != before._shape.length - 1) throw "Shape Error";
+                if (before._shape.slice(1).every((n, i)=>n == x._shape[i]
                 ) == false) throw "Shape Error";
-                const vals = x.value._data;
+                const vals = x._data;
                 for(let index = 0; index < vals.length; index++){
                     new_data[index] = vals[index];
                 }
-                return fromMultiArray(new MultiArray(before.value._shape, new_data, before.value._strides));
+                return new MultiArray(before._shape, new_data, before._strides);
             }
         ,
         null
@@ -2234,11 +1856,9 @@ const builtin_functions_undo = {
         ()=>under_indices
         ,
         (f)=>(a, w)=>{
-                if (a.kind != 'num') throw "Domain Error";
-                if (a.value.rank != 1) throw "Rank Error";
-                const indices1 = a.value._data;
-                if (indices1.length != w.value.length) throw "Length Error";
-                const cells = w.value.firstAxisToArray().map((s)=>w.value.slice(s)
+                const indices1 = takeNumbers(a);
+                if (indices1.length != w.length) throw "Length Error";
+                const cells = w.firstAxisToArray().map((s)=>w.slice(s)
                 );
                 let data1 = [];
                 for(let i = 0; i < indices1.length; i++){
@@ -2246,18 +1866,14 @@ const builtin_functions_undo = {
                     if (n == 0) {
                         data1 = data1.concat(cells[i]._data);
                     } else {
-                        const result = f(fromMultiArray(cells[i]));
-                        if (result.kind != w.kind) throw "Domain Error";
-                        if (result.value.rank != w.value.rank - 1) throw "Rank Error";
-                        if (!result.value._shape.every((n1, i1)=>n1 == w.value._shape[i1 + 1]
+                        const result = f(makeBox(cells[i]));
+                        if (result.rank != w.rank - 1) throw "Rank Error";
+                        if (!result._shape.every((n1, i1)=>n1 == w._shape[i1 + 1]
                         )) throw "Shape Error";
-                        data1 = data1.concat(result.value._data);
+                        data1 = data1.concat(result._data);
                     }
                 }
-                return {
-                    kind: w.kind,
-                    value: new MultiArray(w.value._shape, data1, w.value._strides)
-                };
+                return new MultiArray(w._shape, data1, w._strides);
             }
     ]
 };
@@ -2273,25 +1889,18 @@ const builtin_monads = {
         if (alpha2 == null) throw "An error";
         return [
             (w)=>{
-                const slices = w.value.firstAxisToArray();
+                const slices = w.firstAxisToArray();
                 const new_cells = [
-                    w.value.slice(slices[0])
+                    w.slice(slices[0])
                 ];
                 slices.slice(1).forEach((slice, i)=>{
-                    const a_ = new_cells[i];
-                    const w_ = w.value.slice(slice);
-                    const val = alpha2({
-                        kind: w.kind,
-                        value: a_
-                    }, {
-                        kind: w.kind,
-                        value: w_
-                    });
-                    if (val.kind != w.kind) throw "Domain Error";
-                    new_cells.push(val.value);
+                    const a_ = makeBox(new_cells[i]);
+                    const w_ = w.slice(slice);
+                    let val = alpha2(a_, w_);
+                    if (val.rank == 0) val = val._data[0];
+                    new_cells.push(val);
                 });
-                return fromMultiArray(new_cells.reduce((a, b)=>a.concat(b)
-                ));
+                return makeArray(new_cells);
             },
             null
         ];
@@ -2304,164 +1913,27 @@ const builtin_monads = {
             (a, w)=>alpha2(w, a)
         ];
     },
-    '.pair': ([alpha1, alpha2])=>{
-        if (alpha2 == null) throw "An error";
-        return [
-            (w)=>{
-                switch(w.kind){
-                    case 'num':
-                        {
-                            const cells = w.value._data.slice(1).map((c, i)=>alpha2(makeScalar(w.value._data[i]), makeScalar(c))
-                            );
-                            if (cells[0].value.rank == 0) {
-                                return makeArray(cells.map((v1)=>v1.value._data[0]
-                                ));
-                            }
-                            return makeArray(cells);
-                        }
-                    case 'char':
-                        {
-                            const cells = w.value._data.slice(1).map((c, i)=>alpha2(makeChar(w.value._data[i]), makeChar(c))
-                            );
-                            if (cells[0].value.rank == 0) {
-                                return makeArray(cells.map((v1)=>v1.value._data[0]
-                                ));
-                            }
-                            return makeArray(cells);
-                        }
-                    case 'box':
-                        {
-                            const cells = w.value._data.slice(1).map((c, i)=>alpha2(w.value._data[i], c)
-                            );
-                            if (cells[0].value.rank == 0) {
-                                return makeArray(cells.map((v1)=>v1.value._data[0]
-                                ));
-                            }
-                            return makeArray(cells);
-                        }
-                }
-            },
-            null
-        ];
-    },
     '¨': ([alpha1, alpha2])=>{
         return [
             (w)=>{
                 if (alpha1 == null) throw "Function at ¨ is not prefix";
-                let data1 = [];
-                let data_n = [];
-                let data_c = [];
-                for(let index = 0; index < w.value._data.length; index++){
-                    const result = alpha1(chooseScalar(w.value._data[index]));
-                    if (data_n) {
-                        if (result.kind == 'num' && result.value.rank == 0) {
-                            data_n.push(result.value._data[0]);
-                        } else {
-                            data_n = null;
-                        }
-                    }
-                    if (data_c) {
-                        if (result.kind == 'char' && result.value.rank == 0) {
-                            data_c.push(result.value._data[0]);
-                        } else {
-                            data_c = null;
-                        }
-                    }
-                    data1.push(result);
-                }
-                if (data_n) {
-                    return {
-                        kind: 'num',
-                        value: new MultiArray(w.value._shape, data_n, w.value._strides)
-                    };
-                }
-                if (data_c) {
-                    return {
-                        kind: 'char',
-                        value: new MultiArray(w.value._shape, data_c, w.value._strides)
-                    };
-                }
-                return fromMultiArray(new MultiArray(w.value._shape, data1, w.value._strides));
+                return each(alpha1)(w);
             },
             (a, w)=>{
                 if (alpha2 == null) throw "Function at ¨ is not infix";
-                const a_arr = a.value;
-                const w_arr = w.value;
-                const zipped = MultiArray.zip(a_arr, w_arr, (a1, w1)=>alpha2(chooseScalar(a1), chooseScalar(w1))
-                );
-                let kind1 = zipped._data.map((v1)=>v1.kind
-                ).reduce((acc, x)=>acc == x ? acc : 'box'
-                );
-                let scalars = zipped._data.every((v1)=>v1.value.rank == 0
-                );
-                if (kind1 == 'num' && scalars) {
-                    return fromMultiArray(zipped.map((v1)=>v1.value._data[0]
-                    ));
-                } else if (kind1 == 'char' && scalars) {
-                    return fromMultiArray(zipped.map((v1)=>v1.value._data[0]
-                    ));
-                }
-                return fromMultiArray(zipped);
+                return MultiArray.zip(a, w, underBoxInfix(alpha2));
             }
         ];
     },
     '´': ([alpha1, alpha2])=>{
         return [
             (w)=>{
-                if (alpha1 == null) throw "Function at .¨ is not prefix";
-                const vals = w.value._data.map((n)=>alpha1(chooseScalar(n))
-                );
-                let kind1 = vals.map((v1)=>v1.kind
-                ).reduce((acc, x)=>acc == x ? acc : 'box'
-                );
-                let scalars = vals.every((v1)=>v1.value.rank == 0
-                );
-                if (kind1 == 'num' && scalars) {
-                    return makeArray(vals.map((v1)=>v1.value._data[0]
-                    ));
-                } else if (kind1 == 'char' && scalars) {
-                    return makeArray(vals.map((v1)=>v1.value._data[0]
-                    ));
-                }
-                return fromMultiArray(new MultiArray(w.value._shape, vals, w.value._strides));
+                if (alpha1 == null) throw "Function at ´ is not prefix";
+                return each(alpha1)(w);
             },
             (a, w)=>{
-                if (alpha2 == null) throw "Function at .¨ is not infix";
-                const a_arr = a.value.firstAxisToArray();
-                const w_arr = w.value.firstAxisToArray();
-                let data1 = [];
-                let data_n = [];
-                for (const a_slice of a_arr){
-                    for (const w_slice of w_arr){
-                        const x = fromMultiArrayUnwrap(a.value.slice(a_slice));
-                        const y = fromMultiArrayUnwrap(w.value.slice(w_slice));
-                        const result = alpha2(x, y);
-                        if (data_n) {
-                            if (result.kind == 'num' && result.value.rank == 0) {
-                                data_n.push(result.value._data[0]);
-                            } else {
-                                data_n = null;
-                            }
-                        }
-                        data1.push(result);
-                    }
-                }
-                if (data_n) {
-                    return {
-                        kind: 'num',
-                        value: new MultiArray([
-                            a_arr.length,
-                            w_arr.length
-                        ], data_n)
-                    };
-                }
-                return {
-                    kind: 'box',
-                    value: new MultiArray([
-                        a_arr.length,
-                        w_arr.length
-                    ], data1)
-                };
+                if (alpha2 == null) throw "Function at ´ is not infix";
+                return table(alpha2)(a, w);
             }
         ];
     },
@@ -2469,91 +1941,15 @@ const builtin_monads = {
         return [
             (w)=>{
                 if (alpha1 == null) throw "Function at ` is not prefix";
-                let data1 = [];
-                let data_n = [];
-                let data_c = [];
-                let shape3 = null;
-                for(let index = 0; index < w.value._shape[0]; index++){
-                    const slice = w.value.getFirst(index);
-                    const result = alpha1(fromMultiArray(w.value.slice(slice)));
-                    if (shape3 == null) {
-                        shape3 = result.value._shape;
-                    } else {
-                        if (result.value._shape.length != shape3.length || !result.value._shape.every((n, i)=>n == shape3[i]
-                        )) throw "Shape Error";
-                    }
-                    if (data_n) {
-                        if (result.kind == 'num') {
-                            data_n = data_n.concat(result.value._data);
-                        } else {
-                            data_n = null;
-                        }
-                    }
-                    if (data_c) {
-                        if (result.kind == 'char') {
-                            data_c = data_c.concat(result.value._data);
-                        } else {
-                            data_c = null;
-                        }
-                    }
-                    if (result.kind == 'box') {
-                        data1 = data1.concat(result.value._data);
-                    }
-                }
-                if (shape3 == null) return makeEmpty();
-                if (data_n) {
-                    return {
-                        kind: 'num',
-                        value: new MultiArray([
-                            w.value._shape[0],
-                            ...shape3
-                        ], data_n)
-                    };
-                }
-                if (data_c) {
-                    return {
-                        kind: 'char',
-                        value: new MultiArray([
-                            w.value._shape[0],
-                            ...shape3
-                        ], data_c)
-                    };
-                }
-                return fromMultiArray(new MultiArray([
-                    w.value._shape[0],
-                    ...shape3
-                ], data1));
-            },
-            null
-        ];
-    },
-    '.sum': ([alpha1, alpha2])=>{
-        if (alpha2 == null) throw "Function at .for is not infix";
-        return [
-            (w)=>{
-                let data_n = 0;
-                for(let index = 0; index < w.value._data.length; index++){
-                    const result = alpha2(chooseScalar(index), chooseScalar(w.value._data[index]));
-                    if (!(result.kind == 'num' && result.value.rank == 0)) {
-                        throw "Domain Error";
-                    }
-                    data_n += result.value._data[0];
-                }
-                return makeScalar(data_n);
+                return cellsPrefix(alpha1)(w);
             },
             (a, w)=>{
-                if (a.kind != 'num') throw "Domain Error";
-                if (a.value.rank != 0) throw "Rank Error";
-                const step = a.value._data[0] ?? 1;
-                let data_n = 0;
-                for(let index = 0; index < w.value._data.length; index++){
-                    const result = alpha2(chooseScalar(step ** index), chooseScalar(w.value._data[index]));
-                    if (!(result.kind == 'num' && result.value.rank == 0)) {
-                        throw "Domain Error";
-                    }
-                    data_n += result.value._data[0];
-                }
-                return makeScalar(data_n);
+                if (alpha2 == null) throw "Function at ` is not infix";
+                if (a.rank == 0) return cellsPrefix((w1)=>alpha2(a, w1)
+                )(w);
+                if (w.rank == 0) return cellsPrefix((a1)=>alpha2(a1, w)
+                )(a);
+                return cellsInfix(alpha2)(a, w);
             }
         ];
     }
@@ -2608,10 +2004,7 @@ const builtin_dyads = {
             (w)=>{
                 if (alpha1 == null) throw "Left function at ↑ is not prefix";
                 if (omega1 == null) throw "Right function at ↑ is not prefix";
-                const n_ = omega1(w);
-                if (n_.kind != 'num') throw "Domain Error";
-                if (n_.value.rank != 0) throw "Rank Error";
-                const n = n_.value._data[0] ?? 0;
+                const n = takeScalar(omega1(w));
                 let result = w;
                 for(let i = 0; i < n; ++i){
                     result = alpha1(result);
@@ -2621,10 +2014,7 @@ const builtin_dyads = {
             (a, w)=>{
                 if (alpha2 == null) throw "Left function at ↑ is not infix";
                 if (omega2 == null) throw "Right function at ↑ is not infix";
-                const n_ = omega2(a, w);
-                if (n_.kind != 'num') throw "Domain Error";
-                if (n_.value.rank != 0) throw "Rank Error";
-                const n = n_.value._data[0] ?? 0;
+                const n = takeScalar(omega2(a, w));
                 let result = w;
                 for(let i = 0; i < n; ++i){
                     result = alpha2(a, result);
@@ -2767,7 +2157,7 @@ function evaluate(e, self, globals, funcs) {
             return makeScalar(e.value);
         case ExprKind.String:
             if (e.value.length == 1) {
-                return makeChar(e.value);
+                return makeScalar(e.value);
             }
             return makeString(e.value);
         case ExprKind.Id:
@@ -2781,25 +2171,8 @@ function evaluate(e, self, globals, funcs) {
                 if (e.value.length == 0) {
                     return makeEmpty();
                 }
-                if (e.vkind == 'num') {
-                    const vals = e.value.map((e1)=>e1.value
-                    );
-                    return makeArray(vals);
-                }
-                let vals = e.value.map((e1)=>evaluate(e1, self, globals, funcs)
+                let vals = e.value.map((e1)=>unwrapBox(evaluate(e1, self, globals, funcs))
                 );
-                let kind1 = vals.map((v1)=>v1.kind
-                ).reduce((acc, x)=>acc == x ? acc : 'box'
-                );
-                let scalars = vals.every((v1)=>v1.value.rank == 0
-                );
-                if (kind1 == 'num' && scalars) {
-                    return makeArray(vals.map((v1)=>v1.value._data[0]
-                    ));
-                } else if (kind1 == 'char' && scalars) {
-                    return makeArray(vals.map((v1)=>v1.value._data[0]
-                    ));
-                }
                 return makeArray(vals);
             }
         case ExprKind.Prefix:
@@ -2850,7 +2223,7 @@ function run1(expr, globals) {
     return result;
 }
 function tokens1(expr) {
-    const table = {
+    const table1 = {
         [TokenType.Func]: 'func',
         [TokenType.Monad]: 'monad',
         [TokenType.Dyad]: 'dyad',
@@ -2875,7 +2248,7 @@ function tokens1(expr) {
                     text: expr.slice(col2, start)
                 });
             }
-            const end_kind = table[tk.kind] ?? 'none';
+            const end_kind = table1[tk.kind] ?? 'none';
             code.push({
                 kind: end_kind,
                 text: expr.slice(start, end)
