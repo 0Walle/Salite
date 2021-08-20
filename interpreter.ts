@@ -1,6 +1,6 @@
 import { MultiArray } from "./multiarray.ts"
-import * as Functions from "./based_functions.ts"
-import { Value, Prefix, Infix } from "./based_functions.ts"
+import * as Functions from "./functions.ts"
+import { Value, Prefix, Infix } from "./functions.ts"
 import { parse, Expr, ExprKind, tokenize, Token, TokenType, pretty_expr } from "./parser.ts"
 
 type FuncDesc = [Prefix | null, Infix | null]
