@@ -1,288 +1,134 @@
 import { MultiArray, Slice } from "./multiarray.ts"
 
-export type Value 
-    = { kind: 'num', value: MultiArray<number> }
-    | { kind: 'char', value: MultiArray<string> }
-    | { kind: 'box', value: MultiArray<Value> }
+export type Value = MultiArray<number | string | Value>
 
 export type Prefix = (x: Value) => Value
 export type Infix = (w: Value, x: Value) => Value
 
-export function fromMultiArray(m: MultiArray<number | string | Value>): Value {
-    switch (typeof m._data[0]) {
-        case "number":
-            return ({ kind: 'num', value: <MultiArray<number>>m})
-        case "string":
-            return ({ kind: 'char', value: <MultiArray<string>>m})
-        case "object":
-            return ({ kind: 'box', value: <MultiArray<Value>>m})
-        default:
-            return ({ kind: 'box', value: new MultiArray([], [])})
-
-    }
+export function makeScalar(v: number | string | Value): Value {
+    return new MultiArray([], [v])
 }
 
-export function fromMultiArrayUnwrap(m: MultiArray<number | string | Value>): Value {
-    switch (typeof m._data[0]) {
-        case "number":
-            return ({ kind: 'num', value: <MultiArray<number>>m})
-        case "string":
-            return ({ kind: 'char', value: <MultiArray<string>>m})
-        case "object":
-            if (m.rank == 0) return (<MultiArray<Value>>m)._data[0] ?? makeEmpty()
-            return ({ kind: 'box', value: <MultiArray<Value>>m})
-        default:
-            return ({ kind: 'box', value: new MultiArray([], [])})
-
-    }
-}
-
-export function makeChar(ch: string): Value {
-    return ({ kind: 'char', value: new MultiArray([], [ch]) })
-}
-
-export function makeScalar(n: number): Value {
-    return ({ kind: 'num', value: new MultiArray([], [n]) })
-}
-
-export function chooseScalar(v: number | string | Value): Value {
-    switch (typeof v) {
-        case "number":
-            return ({ kind: 'num', value: new MultiArray([], [v])})
-        case "string":
-            return ({ kind: 'char', value: new MultiArray([], [v])})
-        case "object":
-            return v
-        default:
-            throw "Really Bad Error"
-    }
-}
-
-export function makeArray(arr: (Value[]|number[]|string[]), empty: 'box' | 'num' | 'char' = 'box'): Value {
+export function makeArray(arr: (Value | number | string)[]): Value {
     if (arr.length == 0) {
-        return ({ kind: empty, value: new MultiArray([], [])})
+        return new MultiArray([], [])
     }
 
-    switch (typeof arr[0]) {
-        case "number":
-            return ({ kind: 'num', value: new MultiArray([arr.length], <number[]>arr)})
-        case "string":
-            return ({ kind: 'char', value: new MultiArray([arr.length], <string[]>arr)})
-        case "object":
-            return ({ kind: 'box', value: new MultiArray([arr.length], <Value[]>arr)})
-    }
+    return new MultiArray([arr.length], arr)
     
 }
 
-export function makeEmpty(kind: 'box' | 'num' | 'char' = 'box'): Value {
-    return ({ kind: kind, value: new MultiArray([], [])})
+export function makeEmpty(): Value {
+    return new MultiArray([], [])
 }
 
 export function makeString(str: string): Value {
     const a = Array.from(str)
-    return ({ kind: 'char', value: new MultiArray([a.length], <string[]>a)})
+    return new MultiArray([a.length], a)
 }
 
-function throwErr(err: string): (x: any) => Value {
-    return (_) => { throw new Error(err) }
-}
-
-function throwErrG<T>(err: string): (x: any) => T {
-    return (_) => { throw new Error(err) }
-}
-
-function chooseFunc(num: (x: MultiArray<number>) => Value, char: (x: MultiArray<string>) => Value, arr: (x: MultiArray<Value>) => Value): Prefix {
-    return (x) => {
-        switch (x.kind) {
-            case "num": return num(x.value)
-            case "char": return char(x.value)
-            case "box": return arr(x.value)
-        }
-    }
-}
-
-function makeArithPrefix(num: (x: MultiArray<number>) => Value): Prefix {
+function makeArithPrefix(num: (x: number) => number): Prefix {
     const rec: Prefix = (x) => {
-        switch (x.kind) {
-            case "num": return num(x.value)
-            case "char": return throwErr("Domain Error")(x)
-            case "box": return fromMultiArray(x.value.map(makeArithPrefix(num)))
-        }
+        return x.map(w => {
+            switch (typeof w) {
+                case "number": return num(w)
+                case "string": throw "Domain Error"
+                case "object": return rec(w)
+            }
+        })
     }
     return rec
 }
 
 function makeArithInfix(num: (x: number, y: number) => number): Infix {
     const rec: Infix = (x, y) => {
-        if (x.kind != y.kind) return throwErr(`Domain Error: ${x.kind} ≠ ${y.kind}`)(x)
+        return MultiArray.zip(x, y, (a, b) => {
+            let s = typeof a
+            let t = typeof b
 
-        switch (x.kind) {
-            case "num": return fromMultiArray(MultiArray.zip(x.value, <MultiArray<number>>y.value, num))
-            case "char": return throwErr("Domain Error")(x)
-            case "box": return fromMultiArray(MultiArray.zip(x.value, <MultiArray<Value>>y.value, makeArithInfix(num)))
-        }
+            if (s === 'string' || t === 'string') throw "Invalid type character at arithmetic function"
+
+            if (s === 'number' && t === 'number') return num(<number>a, <number>b)
+
+            let c = makeBox(a)
+            let d = makeBox(b)
+            return rec(<Value>c, <Value>d)
+        })
     }
     return rec
-}
-
-function makeCompInfix(num: (x: number, y: number) => boolean, char: (x: string, y: string) => boolean): Infix {
-    const rec: Infix = (x, y) => { 
-        if (x.kind != y.kind) return throwErr("Domain Error")(x)
-
-        switch (x.kind) {
-            case "num": return fromMultiArray(MultiArray.zip(x.value, <MultiArray<number>>y.value, (x, y) => +num(x, y)))
-            case "char": return fromMultiArray(MultiArray.zip(x.value, <MultiArray<string>>y.value, (x, y) => +char(x, y)))
-            case "box": return fromMultiArray(MultiArray.zip(x.value, <MultiArray<Value>>y.value, (x, y) => rec(x, y)))
-        }
-    }
-    return rec
-}
-
-function makeSameKind<T extends number | string | Value>(f: (a: MultiArray<T>, b: MultiArray<T>) => MultiArray<T>): Infix {
-    return (x, y) => {
-        if (x.kind != y.kind) return throwErr("Domain Error")(x)
-        return fromMultiArray(f(<MultiArray<T>>x.value, <MultiArray<T>>y.value))
-    }
 }
 
 export const add: Infix = makeArithInfix((x, y) => x + y)
-export const neg: Prefix = makeArithPrefix(v => fromMultiArray(v.map(x => -x)))
+export const neg: Prefix = makeArithPrefix(x => -x)
 export const sub: Infix = makeArithInfix((x, y) => x - y)
-export const sign: Prefix = makeArithPrefix(v => fromMultiArray(v.map(x => Math.sign(x))))
+export const sign: Prefix = makeArithPrefix(Math.sign)
 export const mult: Infix = makeArithInfix((x, y) => x * y)
-export const recp: Prefix = makeArithPrefix(v => fromMultiArray(v.map(x => 1/x)))
+export const recp: Prefix = makeArithPrefix(x => 1/x)
 export const div: Infix = makeArithInfix((x, y) => x / y)
-export const exp: Prefix = makeArithPrefix(v => fromMultiArray(v.map(x => Math.exp(x))))
+export const exp: Prefix = makeArithPrefix(Math.exp)
 export const pow: Infix = makeArithInfix((x, y) => x ** y)
-export const ln: Prefix = makeArithPrefix(v => fromMultiArray(v.map(x => Math.log(x))))
+export const ln: Prefix = makeArithPrefix(Math.log)
 export const root: Infix = makeArithInfix((x, y) => y ** (1/x))
-export const sqrt: Prefix = makeArithPrefix(v => fromMultiArray(v.map(x => Math.sqrt(x))))
+export const sqrt: Prefix = makeArithPrefix(Math.sqrt)
 export const log: Infix = makeArithInfix((x, y) => Math.log(y)/Math.log(x))
-export const abs: Prefix = makeArithPrefix(v => fromMultiArray(v.map(x => Math.abs(x))))
+export const abs: Prefix = makeArithPrefix(Math.abs)
 export const mod: Infix = makeArithInfix((x, y) => x == 0 ? y : y % x)
-export const floor: Prefix = makeArithPrefix(v => fromMultiArray(v.map(x => Math.floor(x))))
+export const floor: Prefix = makeArithPrefix(Math.floor)
 export const min: Infix = makeArithInfix((x, y) => Math.min(x, y))
-export const ceil: Prefix = makeArithPrefix(v => fromMultiArray(v.map(x => Math.ceil(x))))
+export const ceil: Prefix = makeArithPrefix(Math.ceil)
 export const max: Infix = makeArithInfix((x, y) => Math.max(x, y))
 
 export const and: Infix = makeArithInfix((x, y) => x & y)
 export const or: Infix = makeArithInfix((x, y) => x | y)
-export const not: Prefix = makeArithPrefix(v => fromMultiArray(v.map(x => 1 - x)))
+export const not: Prefix = makeArithPrefix(x => 1 - x)
 
 export const length: Prefix = (x) => {
-    if (x.value._data.length == 0) return makeScalar(0)
+    if (x._data.length == 0) return makeScalar(0)
 
-    return makeScalar(x.value._shape[0] ?? 1)
+    return makeScalar(x._shape[0] ?? 1)
 }
-export const rank: Prefix = (x) => makeScalar(x.value._shape.length)
-export const shape: Prefix = (x) => makeArray(x.value._shape)
-export const count: Prefix = (x) => makeScalar(x.value._data.length)
+export const rank: Prefix = (x) => makeScalar(x._shape.length)
+export const shape: Prefix = (x) => makeArray(x._shape)
+export const count: Prefix = (x) => makeScalar(x._data.length)
+
+function cmp_scalar_le(x: number | string | Value, y: number | string | Value): number {
+    let s = typeof x, t = typeof y
+    return +(s != t ? s <= t : x <= y)
+}
+
+function cmp_scalar_ge(x: number | string | Value, y: number | string | Value): number {
+    let s = typeof x, t = typeof y
+    return +(s != t ? s >= t : x >= y)
+}
+
+function cmp_scalar_eq(x: number | string | Value, y: number | string | Value): number {
+    let s = typeof x, t = typeof y
+    if (s != t) return 0
+    if (s == 'object') return +match_values(<Value>x, <Value>y)
+    return +(x == y)
+}
 
 export const cmp_lt: Infix = (x, y) => {
-    if (x.kind != y.kind) return throwErr("Domain Error")(x)
-    if (x.value.rank != y.value.rank) return throwErr("Rank Error")(x)
-
-    switch (x.kind) {
-        case "num": return fromMultiArray(MultiArray.zip(x.value, <MultiArray<number>>y.value, (x, y) => +(x < y)))
-        case "char": {
-            if (x.value.rank == 1) {
-                return makeScalar(+(x.value._data.join('') < y.value._data.join('')))
-            }
-
-            return fromMultiArray(MultiArray.zip(x.value, <MultiArray<string>>y.value, (x, y) => +(x < y)))
-        }
-        case "box": {
-            return fromMultiArray(MultiArray.zip(x.value, <MultiArray<Value>>y.value, (x, y) => cmp_lt(x, y)))
-        }
-    }
+    return MultiArray.zip(x, y, (x, y) => 1 - cmp_scalar_ge(x, y))
 }
 export const cmp_le: Infix = (x, y) => {
-    if (x.kind != y.kind) return throwErr("Domain Error")(x)
-    if (x.value.rank != y.value.rank) return throwErr("Rank Error")(x)
-
-    switch (x.kind) {
-        case "num": return fromMultiArray(MultiArray.zip(x.value,<MultiArray<number>>y.value, (x, y) => +(x <= y)))
-        case "char": {
-            if (x.value.rank == 1) {
-                return makeScalar(+(x.value._data.join('') <= y.value._data.join('')))
-            }
-
-            return fromMultiArray(MultiArray.zip(x.value,<MultiArray<string>>y.value, (x, y) => +(x <= y)))
-        }
-        case "box": {
-            return fromMultiArray(MultiArray.zip(x.value,<MultiArray<Value>>y.value, (x, y) => cmp_le(x, y)))
-        }
-    }
+    return MultiArray.zip(x, y, cmp_scalar_le)
 }
 export const cmp_ge: Infix = (x, y) => {
-    if (x.kind != y.kind) return throwErr("Domain Error")(x)
-    if (x.value.rank != y.value.rank) return throwErr("Rank Error")(x)
-
-    switch (x.kind) {
-        case "num": return fromMultiArray(MultiArray.zip(x.value,<MultiArray<number>>y.value, (x, y) => +(x >= y)))
-        case "char": {
-            if (x.value.rank == 1) {
-                return makeScalar(+(x.value._data.join('') >= y.value._data.join('')))
-            }
-
-            return fromMultiArray(MultiArray.zip(x.value,<MultiArray<string>>y.value, (x, y) => +(x >= y)))
-        }
-        case "box": {
-            return fromMultiArray(MultiArray.zip(x.value,<MultiArray<Value>>y.value, (x, y) => cmp_ge(x, y)))
-        }
-    }
+    return MultiArray.zip(x, y, cmp_scalar_ge)
 }
-
 export const cmp_gt: Infix = (x, y) => {
-    if (x.kind != y.kind) return throwErr("Domain Error")(x)
-    if (x.value.rank != y.value.rank) return throwErr("Rank Error")(x)
-
-    switch (x.kind) {
-        case "num": return fromMultiArray(MultiArray.zip(x.value,<MultiArray<number>>y.value, (x, y) => +(x > y)))
-        case "char": {
-            if (x.value.rank == 1) {
-                return makeScalar(+(x.value._data.join('') > y.value._data.join('')))
-            }
-
-            return fromMultiArray(MultiArray.zip(x.value,<MultiArray<string>>y.value, (x, y) => +(x > y)))
-        }
-        case "box": {
-            return fromMultiArray(MultiArray.zip(x.value,<MultiArray<Value>>y.value, (x, y) => cmp_gt(x, y)))
-        }
-    }
+    return MultiArray.zip(x, y, (x, y) => 1 - cmp_scalar_le(x, y))
 }
-
 export const cmp_eq: Infix = (x, y) => { 
-    if (x.kind != y.kind) return throwErr("Domain Error")(x)
-
-    switch (x.kind) {
-        case "num": return fromMultiArray(MultiArray.zip(x.value, <MultiArray<number>>y.value, (x, y) => +(x == y)))
-        case "char": return fromMultiArray(MultiArray.zip(x.value, <MultiArray<string>>y.value, (x, y) => +(x == y)))
-        case "box": return fromMultiArray(MultiArray.zip(x.value, <MultiArray<Value>>y.value, (x, y) => +match_values(x, y)))
-    }
+    return MultiArray.zip(x, y, cmp_scalar_eq)
 }
-
 export const cmp_ne: Infix = (x, y) => { 
-    if (x.kind != y.kind) return throwErr("Domain Error")(x)
-
-    switch (x.kind) {
-        case "num": return fromMultiArray(MultiArray.zip(x.value, <MultiArray<number>>y.value, (x, y) => +(x != y)))
-        case "char": return fromMultiArray(MultiArray.zip(x.value, <MultiArray<string>>y.value, (x, y) => +(x != y)))
-        case "box": return fromMultiArray(MultiArray.zip(x.value, <MultiArray<Value>>y.value, (x, y) => +!match_values(x, y)))
-    }
+    return MultiArray.zip(x, y, (x, y) => 1 - cmp_scalar_eq(x, y))
 }
 
 function match_values(a: Value, b: Value): boolean {
-    if (a.kind != b.kind) return false
-
-    switch (a.kind) {
-        case 'num':
-            return a.value.match(<MultiArray<number>>b.value, (x, y) => x == y)
-        case 'char':
-            return a.value.match(<MultiArray<string>>b.value, (x, y) => x == y)
-        case 'box':
-            return a.value.match(<MultiArray<Value>>b.value, match_values)
-    }
+    return a.match(b, (x, y) => !cmp_scalar_eq(x, y))
 }
 
 export const match: Infix = (x, y) => makeScalar(+match_values(x, y))
@@ -294,260 +140,207 @@ export const right: Infix = (x, y) => y
 
 
 export const join: Infix = (x, y) => {
-    if (x.value._data.length == 0) return y
-    if (y.value._data.length == 0) return x
+    if (x._data.length == 0) return y
+    if (y._data.length == 0) return x
 
-    return makeSameKind((x, y) => x.concat(y))(x, y)
+    return x.concat(y)
 }
 export const couple: Infix = (x, y) => {
-    if (x.kind == y.kind) {
-        return fromMultiArray(<any>x.value.couple(<any>y.value))
-    }
-
-    if (!MultiArray.same_shape(x.value, y.value)) throw "Shape Error"
-
-    const a = x.value.firstAxisToArray().map(slice => fromMultiArrayUnwrap(<any>x.value.slice(slice)))
-    const b = y.value.firstAxisToArray().map(slice => fromMultiArrayUnwrap(<any>y.value.slice(slice)))
-
-    return fromMultiArray(new MultiArray([2, ...x.value._shape], a.concat(b)))
+    return x.couple(y)
 }
 
-export const deshape: Prefix = (x) => <Value>{ kind: x.kind, value: x.value.deshape() }
+export const deshape: Prefix = (x) => x.deshape()
 export const reshape: Infix = (x, y) => {
-    if (x.kind != 'num') throw "Domain Error"
-    return <Value>{kind: y.kind, value: y.value.reshape(x.value._data)}
+    if (x.rank > 1) throw "Rank Error"
+    let shape = x._data.map(Number)
+    return y.reshape(shape)
 }
 
 export const iota: Prefix = (x) => {
-    if (x.kind != 'num') throw "Domain Error"
-    const length = Math.floor(x.value._data.reduce((a, b) => a * b))
+    if (x.rank > 1) throw "Rank Error"
+
+    let shape = x._data.map(Number)
+    const length = Math.floor(shape.reduce((a, b) => a * b))
+
+    if (isNaN(length)) throw "Length Error"
     if (length < 0) throw "Length Error"
-    if (length == 0) return makeEmpty('num')
+    if (length == 0) return makeEmpty()
 
     const data = Array(length).fill(0).map((_,i) => i)
-    return {kind: 'num', value: new MultiArray(x.value._data, data).reshape(x.value._data)}
+    return new MultiArray(shape, data).reshape(shape)
+}
+
+export function takeScalar(x: Value): number {
+    if (x.rank != 0) throw "Rank Error"
+    const n = x._data[0]
+    if (typeof n != 'number') throw "Domain Error"
+    return n
+}
+
+export function takeNumbers(x: Value): number[] {
+    if (x.rank != 1) throw "Rank Error"
+    const n = x._data.map(Number)
+    if (n.some(isNaN)) throw "Domain Error"
+    return n
 }
 
 // *Transpose
 export const reverse: Prefix = (v) => {
-    if (v.value.rank == 0) return v
+    if (v.rank == 0) return v
 
-    const slices = v.value.firstAxisToArray()
-    const final = v.value.select(slices.reverse())
-    return <Value>({ kind: v.kind, value: final })
+    const slices = v.firstAxisToArray()
+    return v.select(slices.reverse())
 }
 
 export const rotate: Infix = (x, y) => {
-    if (x.kind != 'num') throw "Domain Error"
-    if (x.value.rank != 0) throw "Rank Error"
+    const n = takeScalar(x)
 
-    const n = x.value._data[0]
+    if (y.rank == 0) return y
 
-    if (y.value.rank == 0) return y
+    const slices = y.firstAxisToArray()
 
-    
+    let rotated_slices
+
     if (n > 0) {
-        const slices = y.value.firstAxisToArray()
         const removed = slices.splice(0, n % slices.length)
-        const rotated_slices = [...slices, ...removed]
-        const rotated = y.value.select(rotated_slices)
-    
-        return <Value>({ kind: y.kind, value: rotated })
+        rotated_slices = [...slices, ...removed]
     } else {
-        
-        const slices = y.value.firstAxisToArray()
         const removed = slices.splice(0, (slices.length + n) % slices.length)
-        const rotated_slices = [...slices, ...removed]
-        const rotated = y.value.select(rotated_slices)
-    
-        return <Value>({ kind: y.kind, value: rotated })
+        rotated_slices = [...slices, ...removed]
     }
+
+    const rotated = y.select(rotated_slices)
+    return rotated
 
 }
 
 export const take: Infix = (x, y) => {
-    if (x.kind != 'num') throw "Domain Error"
-
-    const n = x.value._data[0]
+    const n = takeScalar(x)
     
-    const slices = y.value.firstAxisToArray()
+    const slices = y.firstAxisToArray()
     if (n > 0) {
-        const final = y.value.select(slices.slice(0, n))
-        return <Value>({ kind: y.kind, value: final })
+        return y.select(slices.slice(0, n))
     } 
 
-    const final = y.value.select(slices.slice(slices.length + n))
-    return <Value>({ kind: y.kind, value: final })
+    return y.select(slices.slice(slices.length + n))
 }
 
 export const drop: Infix = (x, y) => {
-    if (x.kind != 'num') throw "Domain Error"
+    const n = takeScalar(x)
 
-    const n = x.value._data[0]
-    const slices = y.value.firstAxisToArray()
+    const slices = y.firstAxisToArray()
 
     if (n > 0) {
-        const final = y.value.select(slices.slice(n))
-        return <Value>({ kind: y.kind, value: final })
+        return y.select(slices.slice(n))
     }
 
-    const final = y.value.select(slices.slice(0, n))
-    return <Value>({ kind: y.kind, value: final })
+    return y.select(slices.slice(0, n))
 }
 
 export const first: Prefix = (x) => {
-    const val = chooseScalar(x.value._data[0])
-    return val
+    if (!x._data[0]) return makeEmpty()
+    return makeScalar(x._data[0])
 }
 
 export const first_cell: Prefix = (y) => {
-    const final = y.value.getFirst(0)
-    return <Value>({ kind: y.kind, value: y.value.slice(final) })
+    const final = y.getFirst(0)
+    return y.slice(final)
 }
 
 export const pick: Infix = (x, y) => {
-    if (x.kind == 'box') {
-        const result = x.value.map(i => pick(i, y).value._data[0])
-        return <Value>{ kind: y.kind, value: result } 
+    if (x.rank == 0) {
+        const n = takeScalar(x)
+        return makeScalar(y._data[n])
     }
 
-    if (x.kind != 'num') throw "Domain Error"
-
-    if (x.value.rank == 0) {
-        const val = y.value._data[x.value._data[0]]
-        return chooseScalar(val)    
+    try {
+        let n = takeNumbers(x)
+        return makeScalar(y.get(n))
+    } catch {
+        const result = x.map(i => pick(makeScalar(i), y)._data[0])
+        return result
     }
-
-    const val = y.value.get(x.value._data)
-    return chooseScalar(val)
 }
 
 export const select: Infix = (x, y) => {
-    if (x.kind != 'num') throw "Domain Error"
-    
-    if (y.value.rank == 0) throw "Rank Error"
+    if (y.rank == 0) throw "Rank Error"
 
-    if (x.value.rank == 0) {
-        const slice = y.value.getFirst(x.value._data[0] ?? 0)
-
-        return <Value>({ kind: y.kind, value: y.value.slice(slice) })
+    if (x.rank == 0) {
+        let n = takeScalar(x)
+        const slice = y.getFirst(n ?? 0)
+        return y.slice(slice)
     }
 
-    if (x.value.rank != 1) throw "Rank Error"
-
-    const slices = x.value._data.map(i => y.value.getFirst(i))
-
-    return <Value>({ kind: y.kind, value: y.value.select(slices) })
+    let n = takeNumbers(x)
+    const slices = n.map(i => y.getFirst(i))
+    return y.select(slices)
 }
 
 export const membership: Infix = (y, x) => {
-    if (x.kind != y.kind) throw "Domain Error"
-
-    const final = y.value.map((a: string | number | Value) => {
-
-        for (const val of x.value._data) {
-            // match_values
-            if (val == a) return 1
+    const final = y.map((a: string | number | Value) => {
+        for (const val of x._data) {
+            if (cmp_scalar_eq(val, a)) return 1
         }
-
         return 0
     })
-    
-    return <Value>({ kind: 'num', value: final })
+    return final
 }
 
 export const indexof: Infix = (x, y) => {
-    if (x.kind != y.kind) throw "Domain Error"
-
-    const final = y.value.map((a: string | number | Value) => {
-
-        for (let i = 0; i < x.value._data.length; ++i) {
-            // match_values
-            if (x.value._data[i] == a) return i
+    const final = y.map((a: string | number | Value) => {
+        for (let i = 0; i < x._data.length; ++i) {
+            if (cmp_scalar_eq(x._data[i], a)) return i
         }
-
-        return x.value._data.length
+        return x._data.length
     })
     
-    return <Value>({ kind: 'num', value: final })
+    return final
 }
 
 export const indices: Prefix = (x) => {
-    if (x.kind != 'num') throw "Domain Error"
-    if (x.value.rank != 1) throw "Shape Error"
-
-    const data = x.value._data.flatMap((n, i) => <number[]>(Array(n).fill(i)))
-
+    const n = takeNumbers(x)
+    const data = n.flatMap((n, i) => <number[]>(Array(n).fill(i)))
     return makeArray(data)
 }
 
 export const replicate: Infix = (x, y) => {
-    if (x.kind != 'num') throw "Domain Error"
-    if (x.value.rank != 1) throw "Shape Error"
+    const indices_list = takeNumbers(x)
 
-    const indices_list = x.value._data
-
-    if (y.value.length !== indices_list.length) throw "Lenght Error"
+    if (y.length !== indices_list.length) throw "Lenght Error"
 
     const indices = indices_list.flatMap((n, i) => <number[]>(Array(n).fill(i)))
-    const slices = indices.map((i) => y.value.getFirst(i))
-    const final = y.value.select(slices)
+    const slices = indices.map((i) => y.getFirst(i))
 
-    return <Value>{ kind: y.kind, value: final }
+    return y.select(slices)
 }
 
 export const mark_firsts: Prefix = (x) => {
-    if (x.value.rank != 1) throw "Shape Error"
-
+    if (x.rank != 1) throw "Shape Error"
     const uniques: Set<number | string | Value> = new Set()
-
-    const data = x.value.map((n: number | string | Value) => uniques.has(n) ? 0 : ( uniques.add(n), 1))
-
-    return { kind: 'num', value: data}
+    const data = x.map((n: number | string | Value) => uniques.has(n) ? 0 : ( uniques.add(n), 1))
+    return data
 }
 
 export const unique: Prefix = (x) => {
-    if (x.value.rank != 1) throw "Shape Error"
+    if (x.rank != 1) throw "Shape Error"
 
-    switch (x.kind) {
-        case 'num': {
-            const uniques: Set<number> = new Set()
-
-            const data = x.value._data.filter(n => uniques.has(n) ? false : (uniques.add(n), true))
-
-            return makeArray(data)
-        }
-        case 'char': {
-            const uniques: Set<string> = new Set()
-
-            const data = x.value._data.filter(n => uniques.has(n) ? false : (uniques.add(n), true))
-
-            return makeArray(data)
-        }
-        case 'box': {
-            const uniques: Value[] = []
-
-            const has = (v: Value) => uniques.some(u => match_values(u, v))
-
-            const data = x.value._data.filter(n => has(n) ? false : (uniques.push(n), true))
-
-            return makeArray(data)
-        }
-    }
+    const uniques: (number | string | Value)[] = []
+    const has = (v: number | string | Value) => uniques.some(u => cmp_scalar_eq(u, v))
+    const data = x._data.filter(n => has(n) ? false : (uniques.push(n), true))
+    return makeArray(data)
 }
 
 export const group: Infix = (x, y) => {
-    if (x.kind != 'num') throw "Domain Error"
-    if (x.value.rank != 1) throw "Shape Error"
+    const groups = takeNumbers(x)
 
     let data: Slice[][] = []
 
-    for (let i = 0; i < x.value._data.length; i++) {
-        const n = x.value._data[i]
+    for (let i = 0; i < groups.length; i++) {
+        const n = groups[i]
 
         if (n < 0) continue
 
-        const slice = y.value.getFirst(i)
+        const slice = y.getFirst(i)
 
         if (data[n] == undefined) {
             data[n] = [slice]
@@ -562,18 +355,17 @@ export const group: Infix = (x, y) => {
         if (data[i] == undefined) data[i] = []
     }
 
-    const boxes = data.map(slices => <Value>({ kind: y.kind, value: y.value.select(slices)}))
+    const boxes = data.map(slices => y.select(slices))
 
-    return { kind: 'box', value: new MultiArray([data.length], boxes)}
+    return new MultiArray([data.length], boxes)
 }
 
 export const group_indices: Prefix = (x) => {
-    if (x.kind != 'num') throw "Domain Error"
-    if (x.value.rank != 1) throw "Shape Error"
+    const groups = takeNumbers(x)
 
     const data: number[][] = []
 
-    x.value._data.forEach((n, i) => {
+    groups.forEach((n, i) => {
         if (n < 0) return
 
         if (data[n] == undefined) data[n] = []
@@ -589,21 +381,16 @@ export const group_indices: Prefix = (x) => {
 }
 
 export const find: Infix = (pat, x) => {
-    if (pat.kind != x.kind) throw "Domain Error"
+    if (x.rank == 0) throw "Rank Error"
 
-    if (x.value.rank == 0) throw "Rank Error"
-
-    // if (pat.value.rank > x.value.rank) throw "Rank Error"
-    // if (pat.value.rank < x.value.rank - 1) throw "Rank Error"
-
-    if (pat.value.rank == 0) {
+    if (pat.rank == 0) {
         return cmp_eq(pat, x)
     }
 
-    if (pat.value.rank != x.value.rank) throw "Rank Error"
+    if (pat.rank != x.rank) throw "Rank Error"
 
-    const pat_len = pat.value.length ?? 0
-    const x_len = x.value.length ?? 0
+    const pat_len = pat.length ?? 0
+    const x_len = x.length ?? 0
 
     if (pat_len > x_len) return makeEmpty()
 
@@ -615,16 +402,16 @@ export const find: Infix = (pat, x) => {
         }
     }
 
-    const pat_cells = pat.value.firstAxisToArray()
-    const cells = x.value.firstAxisToArray()
+    const pat_cells = pat.firstAxisToArray()
+    const cells = x.firstAxisToArray()
 
     const result = new Array(x_len).fill(0)
 
     for (let i = 0; i < x_len - pat_len; i++) {
         let got = 1
         for (let j = 0; j < pat_cells.length; j++) {
-            const pat_c = fromMultiArray(pat.value.slice(pat_cells[j]))
-            const x_c = fromMultiArray(x.value.slice(cells[i + j]))
+            const pat_c = pat.slice(pat_cells[j])
+            const x_c = x.slice(cells[i + j])
 
             if (false == match_values(pat_c, x_c)) {
                 got = 0
@@ -638,46 +425,48 @@ export const find: Infix = (pat, x) => {
 }
 
 export const enclose: Prefix = (x) => {
-    return { kind: 'box', value: new MultiArray([], [x]) }
+    return new MultiArray([], [x])
+}
+
+export function makeBox(v: number | string | Value): Value {
+    return typeof v == 'object' ? v : makeScalar(v)
+}
+
+export function unwrapBox(v: Value): number | string | Value {
+    if (v.rank == 0) return v._data[0]
+    return v
 }
 
 export const merge: Prefix = (x) => {
-    if (x.kind != "box") throw "Domain Error"
+    if (x.rank == 0) return x
 
-    let first = x.value._data[0]
+    let first = makeBox(x._data[0])
 
-    const result = x.value._data.reduce((acc, v) => {
-        if (acc.kind != v.kind) throw "Domain Error"
+    const result = x._data.map(makeBox).reduce((acc, v) => {
+        if (!MultiArray.same_shape(first, v)) throw "Shape Error"
 
-        if (!MultiArray.same_shape(first.value, v.value)) throw "Shape Error"
-
-        return fromMultiArray(<any>acc.value.concat(<any>v.value))
+        return acc.concat(v)
     })
 
-    
-
-    return fromMultiArray(<any>result.value.reshape([...x.value._shape, ...first.value._shape]))
+    return result.reshape([...x._shape, ...first._shape])
 }
 
 export const windows: Infix = (n, x) => {
-    if (n.kind != "num") throw "Domain Error"
-    if (n.value.rank != 0) throw "Rank Error"
+    if (x.rank == 0) return x
 
-    if (x.value.rank == 0) throw "Rank Error"
-
-    const len = n.value._data[0]
+    const len = takeScalar(n)
 
     if (len <= 0) throw "Value Error"
 
-    if (len >= x.value._shape[0]) throw "Value Error"
+    if (len >= x._shape[0]) throw "Value Error"
 
     let windows: Slice[] = []
 
-    const span = x.value._shape[0] - len + 1
+    const span = x._shape[0] - len + 1
 
     for (let i = 0; i < span; i++) {
-        let a = x.value.getFirst(i)
-        let b = x.value.getFirst(i + len - 1)
+        let a = x.getFirst(i)
+        let b = x.getFirst(i + len - 1)
 
         windows.push({ start: a.start, end: b.end, shape: [len, ...a.shape] })
     }
@@ -687,20 +476,25 @@ export const windows: Infix = (n, x) => {
     for (let i = 0; i < windows.length; i++) {
         const slice = windows[i]
         
-        data = data.concat(x.value._data.slice(slice.start, slice.end))
+        data = data.concat(x._data.slice(slice.start, slice.end))
     }
 
-    return <Value>({ kind: x.kind, value: new MultiArray([windows.length, ...windows[0].shape], data)})
+    return new MultiArray([windows.length, ...windows[0].shape], data)
 }
 
 export const solo: Prefix = (x) => {
-    return <Value>{ kind: x.kind, value: x.value.reshape([1, ...x.value._shape]) }
+    return x.reshape([1, ...x._shape])
+}
+
+function scalar_depth(v: number | string | Value) {
+    let s = typeof v
+    if (s == 'object') return value_depth(<Value>v)
+    return 0
 }
 
 function value_depth(v: Value): number {
-    if (v.kind != 'box') return 0
-
-    return 1 + Math.max(...v.value._data.map(value_depth))
+    if (v.rank == 0) return 0
+    return 1 + Math.max(...v._data.map(scalar_depth))
 }
 
 export const depth: Prefix = (x) => {
@@ -709,104 +503,39 @@ export const depth: Prefix = (x) => {
 
 
 function compare_values(a: Value, b: Value): number {
-    const gt = cmp_gt(a, b)
-    if (gt.kind != 'num') throw "Domain Error compare" + gt.kind
-    if (gt.value.rank != 0) throw "Rank Error"
-    if (gt.value._data[0] != 0) return 1
-
-    const lt = cmp_lt(a, b)
-    if (lt.kind != 'num') throw "Domain Error compare"
-    if (lt.value.rank != 0) throw "Rank Error"
-    if (lt.value._data[0] != 0) return -1
-
+    if (!cmp_scalar_le(a, b)) return 1
+    if (!cmp_scalar_ge(a, b)) return -1
     return 0
 }
 
 export const grade_up: Prefix = (x) => {
-    const slices = x.value.firstAxisToArray()
-    const sliced = slices.map(s => x.value.slice(s))
-    switch (x.kind) {
-        case "num":
-            if (x.value.rank == 1) {
-                const indices = slices.map((_, i) => i).sort((a, b) => {
-                    return <number>sliced[a]._data[0] - <number>sliced[b]._data[0]
-                })
-                return makeArray(indices)
-            }
+    const slices = x.firstAxisToArray()
+    const sliced = slices.map(s => x.slice(s))
 
-            throw "Rank Error"
-        case "char": {
-            if (x.value.rank == 1) {
-                const strings = sliced.map(s => s._data.join(''))
+    const indices = slices.map((_, i) => i).sort((a, b) => {
+        return compare_values(sliced[a], sliced[b])
+    })
 
-                const indices = slices.map((_, i) => i).sort((a, b) => {
-                    if (strings[a] > strings[b]) return 1
-                    if (strings[a] < strings[b]) return -1
-                    return 0
-                })
-                return makeArray(indices)
-            }
-    
-            throw "Rank Error"
-        }
-        case "box": {
-            if (x.value.rank == 1) {
-                const indices = slices.map((_, i) => i).sort((a, b) => {
-                    return compare_values(<Value>sliced[a]._data[0], <Value>sliced[b]._data[0])
-                })
-                return makeArray(indices)
-            }
-            throw "Rank Error"
-        }
-    }
+    return makeArray(indices)
 }
 
 export const grade_down: Prefix = (x) => {
-    const slices = x.value.firstAxisToArray()
-    const sliced = slices.map(s => x.value.slice(s))
-    switch (x.kind) {
-        case "num":
-            if (x.value.rank == 1) {
-                const indices = slices.map((_, i) => i).sort((a, b) => {
-                    return (<number>sliced[a]._data[0] - <number>sliced[b]._data[0]) * -1
-                })
-                return makeArray(indices) 
-            }
+    const slices = x.firstAxisToArray()
+    const sliced = slices.map(s => x.slice(s))
 
-            throw "Rank Error"
-        case "char": {
-            if (x.value.rank == 1) {
-                const strings = sliced.map(s => s._data.join(''))
+    const indices = slices.map((_, i) => i).sort((a, b) => {
+        return compare_values(sliced[a], sliced[b]) * -1
+    })
 
-                const indices = slices.map((_, i) => i).sort((a, b) => {
-                    if (strings[a] > strings[b]) return -1
-                    if (strings[a] < strings[b]) return 1
-                    return 0
-                })
-                return makeArray(indices)
-            }
-    
-            throw "Rank Error"
-        }
-        case "box": {
-            if (x.value.rank == 1) {
-                const indices = slices.map((_, i) => i).sort((a, b) => {
-                    return compare_values(<Value>sliced[a]._data[0], <Value>sliced[b]._data[0]) * -1
-                })
-                return makeArray(indices)
-            }
-            throw "Rank Error"
-        }
-    }
+    return makeArray(indices)
 }
 
 export const under_indices: Prefix = (x) => {
-    if (x.kind != 'num') throw "Domain Error"
-    if (x.value.rank != 1) throw "Shape Error"
+    const indices = takeNumbers(x)
 
     const data: number[] = []
 
-    x.value._data.forEach(n => {
+    indices.forEach(n => {
         if (n < 0) return
 
         if (data[n] == undefined) data[n] = 0
@@ -821,38 +550,104 @@ export const under_indices: Prefix = (x) => {
     return makeArray(data)
 }
 
+export function underBoxPrefix(f: Prefix): (v: number | string | Value) => number | string | Value {
+    return (v) => unwrapBox(f(makeBox(v)))
+}
+
+export function underBoxInfix(f: Infix): (a: number | string | Value, b: number | string | Value) => number | string | Value {
+    return (a, b) => unwrapBox(f(makeBox(a), makeBox(b)))
+}
+
 export const reduce: (f: Infix) => Prefix = (f) => (w) => {
-    if (w.value.length == undefined) return w
+    if (w.length == undefined) return w
 
-    switch (w.kind) {
-        case "num":
-            return fromMultiArray(w.value.reduce((a, b) => {
-                const x = makeScalar(a)
-                const y = makeScalar(b)
+    const result = w.map(makeBox).reduce(f)
 
-                return (<number>(f(x, y).value._data[0]))
-            }))
-        case "char":
-            return fromMultiArray(w.value.reduce((a, b) => {
-                const x = makeChar(a)
-                const y = makeChar(b)
+    if (result.rank == 0) return result._data[0]
+    return result
+}
 
-                return (<string>(f(x, y).value._data[0]))
-            }))
-        case "box":
-            return fromMultiArray(w.value.reduce(f))
+export const each: (f: Prefix) => Prefix = (f) => (w) => {
+
+    let data: (number | string | Value)[] = []
+    for (let index = 0; index < w._data.length; index++) {
+        const result = underBoxPrefix(f)(w._data[index])
+        data.push(result)
     }
+
+    return new MultiArray(w._shape, data, w._strides)
 }
 
-{
-    const a = MultiArray.from([1, 2, 3, 4, 5, 6]).reshape([2, 3])
+export const cellsPrefix: (f: Prefix) => Prefix = (f) => (w) => {
+    const cells = w.firstAxisToArray()
+
+    let data: (Value | string | number)[] = []
+
+    let shape: number[] | null = null
+
+    for (const slice of cells) {
+        const cell = f(w.slice(slice))
+
+        if (shape == null) {
+            shape = cell._shape
+        } else if (cell._shape.length != shape.length 
+            || !cell._shape.every((n, i) => n == (<number[]>shape)[i])) {
+                throw "Shape Error"
+        }
+
+        data = data.concat(cell._data)
+    }
+
+    if (w.length == undefined || shape == null) return makeEmpty()
+    return new MultiArray([w.length, ...shape], data)
+}
+
+export const cellsInfix: (f: Infix) => Infix = (f) => (a, w) => {
+    if (a.length != w.length) throw "Length Error"
+
+    const a_arr = a.firstAxisToArray()
+    const w_arr = w.firstAxisToArray()
+
+    let data: (Value | string | number)[] = []
+
+    let shape: number[] | null = null
+
+    for (let i = 0; i < a_arr.length; i++) {
+        const x = a.slice(a_arr[i])
+        const y = w.slice(w_arr[i])
+        
+        const result = f(x, y)
+
+        if (shape == null) {
+            shape = result._shape
+        } else if (result._shape.length != shape.length 
+            || !result._shape.every((n, i) => n == (<number[]>shape)[i])) {
+                throw "Shape Error"
+        }
+
+        data = data.concat(result._data)
+    }
+
+    if (shape == null) return makeEmpty()
+    return new MultiArray([a_arr.length, ...shape], data)
+}
+
+export const table: (f: Infix) => Infix = (f) => (a, w) => {
+    const a_arr = a.firstAxisToArray()
+    const w_arr = w.firstAxisToArray()
+
+    let data: (Value | string | number)[] = []
+
+    for (const a_slice of a_arr) {
+        for (const w_slice of w_arr) {
+            const x = a.slice(a_slice)
+            const y = w.slice(w_slice)
+
+            const result = unwrapBox(f(x, y))
+
+            data.push(result)
+        }
+    }
     
-    const r = a.reduce((a, b) => a + b)
-
-    console.log(r)
+    return new MultiArray([a_arr.length, w_arr.length], data)
 }
-
-// console.log((new MultiArray([2, 2, 3], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])).get([0, 0, -1]))
-
-// console.log((new MultiArray([2, 2], [1, 2, 3, 4])).joinLast(new MultiArray([], [5])))
-// console.log(MultiArray.from('<>>><<').map(s => +(s == '>') - +(s == '<')).reduce((a, b) => a + b))

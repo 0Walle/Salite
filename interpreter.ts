@@ -1,6 +1,6 @@
 import { MultiArray } from "./multiarray.ts"
-import * as Functions from "./functions.ts"
-import { Value, Prefix, Infix } from "./functions.ts"
+import * as Functions from "./based_functions.ts"
+import { Value, Prefix, Infix } from "./based_functions.ts"
 import { parse, Expr, ExprKind, tokenize, Token, TokenType, pretty_expr } from "./parser.ts"
 
 type FuncDesc = [Prefix | null, Infix | null]
@@ -39,110 +39,115 @@ class SaliteArityError extends SaliteError {
 function pretty_value_(v: Value): string[] {
     if (v == undefined) return ['ERR']
 
-    if (v.value._data.length == 0) return ['ø']
+    if (v._data.length == 0) return ['ø']
 
-    switch (v.kind) {
-        case "num": {
-            if (v.value.rank == 0) return [`${v.value._data[0]}`]
-
-            if (v.value.rank == 1) {
-                return [`[ ${v.value._data.map(n => String(n)).join(' ')} ]`]
+    if (v.rank == 0) {
+        let single = v._data[0]
+        switch (typeof single) {
+            case 'number': {
+                let s = `nan`
+                if (isNaN(single)) return [s]
+                if (!isFinite(single)) s = single < 0 ? `¬∞` : `∞`
+                if (single < 0) return [`¬${String(-single)}`]
+                return [String(single)]
             }
+            case 'string':
+                return [`'${single}'`]
+            case 'object': {
+                let string = pretty_value_(Functions.makeBox(single))
 
-            let i = 0
-            let last = v.value._strides[v.value._strides.length-2]
-            let strings = []
-            let col_max = Array(last).fill(0)
-            while (i < v.value._data.length) {
-                if (i != 0 && v.value._strides.slice(0, -2).some(n => i % n == 0)) strings.push([""])
-
-                const row_string = v.value._data.slice(i, i + last).map(n => String(n))
-
-                row_string.forEach((s, i) => { if (s.length > col_max[i]) col_max[i] = s.length })
-
-                strings.push(row_string)
-                i += last
-            }
-
-            const padded = strings.map(s => s.map((s, i) => s.padStart(col_max[i])).join(' '))
-
-            return [
-                `┌─`.padEnd(padded[0].length+4),
-                `╵ ${padded[0]}`,
-                ...padded.slice(1).map(x => '  ' + x),
-                `${' '.repeat(padded[0].length+3)}┘`
-            ]
-        }
-        case "char": {
-            if (v.value.rank == 0) return [`'${v.value._data[0]}'`]
-
-            if (v.value.rank == 1) return [`'${v.value._data.join('')}'`]
-
-            let i = 0
-            let last = v.value._strides[v.value._strides.length-2]
-            let strings = []
-            while (i < v.value._data.length) {
-                if (i != 0 && v.value._strides.slice(0, -2).some(n => i % n == 0)) strings.push("")
-                strings.push(v.value._data.slice(i, i + last).join(''))
-                i += last
-            }
-
-            return strings.map((s, i) => (i > 0 ? ' ' : '"') + s + ( i == strings.length - 1 ? '"' : ' '))
-        }
-        case "box": {
-            let strings = v.value._data.map(pretty_value_)
-
-            let len = Math.max(...strings.map(ss => ss[0].length))
-
-            let hei = Math.max(...strings.map(ss => ss.length))
-
-            if (hei == 1 && v.value.rank == 1) {
-                return [
-                    `⟨ ${strings.map(ss => ss.join(' ')).join(' ')} ⟩`
-                ]
-            }
-
-            if (v.value.rank == 2 && hei == 1) {
-                let new_strings: string[] = []
-
-                let last = v.value._shape[1]
-                let first = v.value._shape[0]
-
-                const them = strings.map(s => s[0].padEnd(len))
-
-                for (let i = 0; i < first; i++) {
-                    const element = them.slice(i * last, (i+1) * last).join(' ')
-                    new_strings.push(element)
-                }
-
-                len = new_strings[0].length
+                let len = string[0].length
 
                 return [
-                    `┌~${v.value._shape.join(' ')}`.padEnd(len+3),
-                    `╵ ${new_strings[0]}`,
-                    ...new_strings.slice(1).map(s => '  ' + s),
+                    `┌`.padEnd(len+4),
+                    `  ${string[0]}`,
+                    ...string.slice(1).map(s => '  ' + s),
                     `${' '.repeat(len+3)}┘`
                 ]
             }
-
-            if (v.value.rank == 0) {
-                return [
-                    `┌∙`.padEnd(len+4),
-                    `╵ ${strings[0][0]}`,
-                    ...strings[0].slice(1).map(s => '  ' + s),
-                    `${' '.repeat(len+3)}┘`
-                ]
-            }
-
-            return [
-                `┌~${v.value._shape.join(' ')}`.padEnd(len+4),
-                `╵ ${strings[0][0]}`,
-                ...strings[0].slice(1).map(s => '  ' + s),
-                ...strings.slice(1).flatMap(s => s.map(s => '  ' + s).join('\n')),
-                `${' '.repeat(len+3)}┘`
-            ]
         }
     }
+
+    if (v._data.every(v => typeof v == 'string')) {
+        if (v.rank == 1) return [`'${v._data.join('')}'`]
+
+        let i = 0
+        let last = v._strides[v._strides.length-2]
+        let strings = []
+        while (i < v._data.length) {
+            if (i != 0 && v._strides.slice(0, -2).some(n => i % n == 0)) strings.push("")
+            strings.push(v._data.slice(i, i + last).join(''))
+            i += last
+        }
+
+        return strings.map((s, i) => (i > 0 ? ' ' : '"') + s + ( i == strings.length - 1 ? '"' : ' '))
+    }
+
+    let strings = v._data.map(v => pretty_value_(Functions.makeBox(v)))
+
+    if (v.rank == 1) {
+        let sizes = strings.map(ss => [ss[0].length, ss.length])
+        let max_height = Math.max(...sizes.map(b => b[1]))
+
+        if (max_height == 1) return [
+            `⟨ ${strings.map(ss => ss.join(' ')).join(' ')} ⟩`
+        ]
+
+        let layers = []
+
+        for (let i = 0; i < max_height; i++) {
+            let layer = strings.map((ss, j) => ss[i] ?? ' '.repeat(sizes[j][0]))
+
+            layers.push(layer.join(' '))
+        }
+
+        const len = layers[0].length
+
+        return [
+            `┌─`.padEnd(len+4),
+            `│ ${layers[0]}`,
+            ...layers.slice(1).map(ss => '  ' + ss),
+            `${' '.repeat(len+3)}┘`
+        ]
+    }
+
+    let max_hei = Math.max(...strings.map(ss => ss.length))
+
+    if (v.rank == 2 && max_hei == 1) {
+        let i = 0
+        let last = v._strides[v._strides.length-2]
+        let strings = []
+        let col_max = Array(last).fill(0)
+        while (i < v._data.length) {
+            if (i != 0 && v._strides.slice(0, -2).some(n => i % n == 0)) strings.push([""])
+
+            const row_string = v._data.slice(i, i + last).map(n => pretty_value_(Functions.makeBox(n))[0])
+
+            row_string.forEach((s, i) => { if (s.length > col_max[i]) col_max[i] = s.length })
+
+            strings.push(row_string)
+            i += last
+        }
+
+        const padded = strings.map(s => s.map((s, i) => s.padStart(col_max[i])).join(' '))
+
+        return [
+            `┌─`.padEnd(padded[0].length+4),
+            `│ ${padded[0]}`,
+            ...padded.slice(1).map(x => '  ' + x),
+            `${' '.repeat(padded[0].length+3)}┘`
+        ]
+    }
+
+    let len = Math.max(...strings.map(ss => ss[0].length))
+
+    return [
+        `┌~${v._shape.join(' ')}`.padEnd(len+4),
+        `╵ ${strings[0][0]}`,
+        ...strings[0].slice(1).map(s => '  ' + s),
+        ...strings.slice(1).flatMap(s => s.map(s => '  ' + s).join('\n')),
+        `${' '.repeat(len+3)}┘`
+    ]
 }
 
 const builtin_functions: FuncMap = {
@@ -189,35 +194,23 @@ const builtin_functions: FuncMap = {
     ':¢': [Functions.first_cell, Functions.select],
 
     ':<': [null, Functions.take],
-    ':>': [null, Functions.drop],
-
-    'Box': [(x) => {
-        return Functions.fromMultiArray(x.value.map(Functions.chooseScalar))
-    }, null], 
-    
+    ':>': [null, Functions.drop],    
 
     'δ': [(w) => Functions.makeString(pretty_value(w)), (op, w) => {
-        if (op.kind != 'num') throw "Domain Error"
-
-        let n = op.value._data[0]
+        let n = Functions.takeScalar(op)
 
         switch (n) {
             case 0:
-                if (w.kind != 'num') throw "Domain Error"
-                return Functions.makeChar(String.fromCharCode(w.value._data[0]))
+                return Functions.makeScalar(String.fromCharCode(Number(w._data[0])))
             default:
                 return Functions.makeString(pretty_value(w))
         }
     }],
     ':δ': [(w) => {
-        if (w.kind != 'char') throw "Domain Error"
-        return Functions.makeScalar(parseFloat(w.value._data.join(''))) 
+        return Functions.makeScalar(parseFloat(w._data.map(String).join('')))
     }, (op, w) => {
-        if (w.kind != 'char') throw "Domain Error"
-        if (op.kind != 'num') throw "Domain Error"
-
-        let str = w.value._data.join('')
-        let n = op.value._data[0]
+        let str = w._data.map(String).join('')
+        let n = Functions.takeScalar(op)
 
         switch (n) {
             case 0: return Functions.makeScalar(str.charCodeAt(0))
@@ -228,9 +221,9 @@ const builtin_functions: FuncMap = {
     }],
     'Shout': [(w) => (alert(pretty_value(w)), w), null],
     '!': [(w) => {
-        if (w.value._data[0] == undefined) throw "Error"
+        if (w._data[0] == undefined) throw "Error"
 
-        const val = w.value._data[0]
+        const val = w._data[0]
 
         if (typeof val == 'number' && val == 0) {
             throw "Error"
@@ -238,28 +231,8 @@ const builtin_functions: FuncMap = {
 
         return w
     }, null],
-    'Fill': [null, (a, w) => {
-        if (a.kind != 'num') throw "Domain Error"
-        if (a.value.rank != 0) throw "Rank Error"
-        const n = Math.floor(a.value._data[0])
-        if (n < 0) throw "Lenght Error"
-
-        const span = w.value._shape[0] ?? 1
-        const spanned = Math.max(n - span, 0)
-        const stride = w.value._strides[0] ?? 1
-
-        const filler = new Array(spanned*stride)
-
-        const new_shape = [n, ...w.value._shape.slice(1)]
-
-        switch (w.kind) {
-            case 'num': return <Value>{ kind: 'num', value: new MultiArray(new_shape, w.value._data.concat(filler.fill(0))) }
-            case 'char': return <Value>{ kind: 'char', value: new MultiArray(new_shape, w.value._data.concat(filler.fill(' '))) }
-            case 'box': return <Value>{ kind: 'box', value: new MultiArray(new_shape, w.value._data.concat(filler.fill(Functions.makeEmpty()))) }
-        }
-    }],
     '?': [null, (a, w) => {
-        if (w.value._data[0] == undefined) return a
+        if (w._data[0] == undefined) return a
         return w
     }],
 }
@@ -285,41 +258,35 @@ const builtin_functions_undo: { [name: string]: [((before: Value) => Prefix) | n
     'ρ': [(before) => (x) => Functions.reshape(x, before), (f) => (_, w) => Functions.reshape(Functions.shape(w), f(w))],
 
     '¢': [(before) => (x) => {
-        const new_data = [...before.value._data]
+        const new_data = [...before._data]
 
-        if (x.kind != before.kind) throw "Domain Error"
-        if (x.value.rank != 0) throw "Rank Error"
+        if (x.rank != 0) throw "Rank Error"
 
-        new_data[0] = x.value._data[0]
+        new_data[0] = x._data[0]
 
-        return Functions.fromMultiArray(new MultiArray(before.value._shape, new_data, before.value._strides))
+        return new MultiArray(before._shape, new_data, before._strides)
     }, null],
     ':¢': [(before) => (x) => {
-        const new_data = [...before.value._data]
+        const new_data = [...before._data]
 
-        if (x.kind != before.kind) throw "Domain Error"
-
-        if (x.value._shape.length != before.value._shape.length - 1) throw "Shape Error"
+        if (x._shape.length != before._shape.length - 1) throw "Shape Error"
         
-        if (before.value._shape.slice(1).every((n, i) => n == x.value._shape[i]) == false) throw "Shape Error"
+        if (before._shape.slice(1).every((n, i) => n == x._shape[i]) == false) throw "Shape Error"
 
-        const vals = x.value._data
+        const vals = x._data
 
         for (let index = 0; index < vals.length; index++) {
             new_data[index] = vals[index]
         }
 
-        return Functions.fromMultiArray(new MultiArray(before.value._shape, new_data, before.value._strides))
+        return new MultiArray(before._shape, new_data, before._strides)
     }, null],
-    '$': [() => Functions.under_indices, (f) => (a, w) => {
-        if (a.kind != 'num') throw "Domain Error"
-        if (a.value.rank != 1) throw "Rank Error"
-        
-        const indices = <number[]>a.value._data
+    '$': [() => Functions.under_indices, (f) => (a, w) => {        
+        const indices = Functions.takeNumbers(a)
 
-        if (indices.length != w.value.length) throw "Length Error"
+        if (indices.length != w.length) throw "Length Error"
         
-        const cells = w.value.firstAxisToArray().map(s => w.value.slice(s))
+        const cells = w.firstAxisToArray().map(s => w.slice(s))
 
         let data: any[] = []
 
@@ -328,17 +295,16 @@ const builtin_functions_undo: { [name: string]: [((before: Value) => Prefix) | n
             if (n == 0) {
                 data = data.concat(cells[i]._data)
             } else {
-                const result = f(Functions.fromMultiArray(cells[i]))
+                const result = f(Functions.makeBox(cells[i]))
 
-                if (result.kind != w.kind) throw "Domain Error"
-                if (result.value.rank != w.value.rank - 1) throw "Rank Error"
-                if (!result.value._shape.every((n, i) => n == w.value._shape[i+1])) throw "Shape Error"
+                if (result.rank != w.rank - 1) throw "Rank Error"
+                if (!result._shape.every((n, i) => n == w._shape[i+1])) throw "Shape Error"
 
-                data = data.concat(result.value._data)
+                data = data.concat(result._data)
             }
         }
 
-        return { kind: w.kind, value: new MultiArray(w.value._shape, data, w.value._strides)}
+        return new MultiArray(w._shape, data, w._strides)
     }],
 }
 
@@ -352,251 +318,57 @@ const builtin_monads: MonadMap = {
         if (alpha2 == null) throw "An error"
 
         return [ (w) => {
-            const slices = w.value.firstAxisToArray()
+            const slices = w.firstAxisToArray()
 
-            const new_cells = [w.value.slice(slices[0])]
+            const new_cells: (string | number | Value)[] = [w.slice(slices[0])]
 
             slices.slice(1).forEach((slice, i: number) => {
-                const a_ = new_cells[i]
-                const w_ = w.value.slice(slice)
-                const val = alpha2(<Value>{ kind: w.kind, value: a_}, <Value>{ kind: w.kind, value: w_})
-                if (val.kind != w.kind) throw "Domain Error"
-                new_cells.push(val.value)
+                const a_ = Functions.makeBox(new_cells[i])
+                const w_ = w.slice(slice)
+                let val: string | number | Value = alpha2(a_, w_)
+                if (val.rank == 0) val = val._data[0]
+                new_cells.push(val)
             })
             
-            return Functions.fromMultiArray(<any>new_cells.reduce((a, b) => a.concat(<any>b)))
+            return Functions.makeArray(new_cells)
         }, null ]
     }, 
     '§': ([alpha1, alpha2]) => {
         if (alpha2 == null) throw "An error"
         return [ (w) => alpha2(w, w), (a, w) => alpha2(w, a) ]
     },
-    '.pair': ([alpha1, alpha2]) => {
-        if (alpha2 == null) throw "An error"
-        return [ (w) => {
-            
-            
-            switch (w.kind) {
-                case 'num': {
-                    const cells = w.value._data.slice(1).map((c, i) => alpha2(Functions.makeScalar(w.value._data[i]), Functions.makeScalar(c)))
-
-                    if (cells[0].value.rank == 0) {
-                        return Functions.makeArray(<any>cells.map(v => v.value._data[0]))
-                    }
-
-                    return Functions.makeArray(cells)
-                }
-                case 'char': {
-                    const cells = w.value._data.slice(1).map((c, i) => alpha2(Functions.makeChar(w.value._data[i]), Functions.makeChar(c)))
-
-                    if (cells[0].value.rank == 0) {
-                        return Functions.makeArray(<any>cells.map(v => v.value._data[0]))
-                    }
-
-                    return Functions.makeArray(cells)
-                }
-                case 'box': {
-                    const cells = w.value._data.slice(1).map((c, i) => alpha2(w.value._data[i], c))
-
-                    if (cells[0].value.rank == 0) {
-                        return Functions.makeArray(<any>cells.map(v => v.value._data[0]))
-                    }
-
-                    return Functions.makeArray(cells)
-                }
-            }
-            
-        }, null ]
-    },
     '¨': ([alpha1, alpha2]) => {
         return [ (w) => {
             if (alpha1 == null) throw "Function at ¨ is not prefix"
-
-            let data: Value[] = []
-            let data_n: number[] | null = []
-            let data_c: string[] | null = []
-
-            for (let index = 0; index < w.value._data.length; index++) {
-                const result = alpha1(Functions.chooseScalar(w.value._data[index]))
-
-                if (data_n) {
-                    if (result.kind == 'num' && result.value.rank == 0) {
-                        data_n.push(result.value._data[0])
-                    } else {
-                        data_n = null
-                    }
-                } 
-                
-                if (data_c) {
-                    if (result.kind == 'char' && result.value.rank == 0) {
-                        data_c.push(result.value._data[0])
-                    } else {
-                        data_c = null
-                    }
-                }
-
-                data.push(result)
-            }
-
-            if (data_n) {
-                return { kind: 'num', value: new MultiArray(w.value._shape, data_n, w.value._strides)}
-            }
-
-            if (data_c) {
-                return { kind: 'char', value: new MultiArray(w.value._shape, data_c, w.value._strides)}
-            }
-
-            return Functions.fromMultiArray(new MultiArray(w.value._shape, data, w.value._strides))
+            return Functions.each(alpha1)(w)
         }, (a, w) => {
             if (alpha2 == null) throw "Function at ¨ is not infix"
-
-            const a_arr = a.value
-            const w_arr = w.value
-            const zipped = MultiArray.zip(<MultiArray<any>>a_arr, <MultiArray<any>>w_arr, (a: any, w: any) => alpha2(Functions.chooseScalar(a), Functions.chooseScalar(w)))
-
-            let kind = zipped._data.map(v => v.kind).reduce((acc, x) => acc == x ? acc : 'box')
-            let scalars = zipped._data.every(v => v.value.rank == 0)
-
-            if (kind == 'num' && scalars) {
-                return Functions.fromMultiArray(zipped.map(v => <number>v.value._data[0]))
-            } else if (kind == 'char' && scalars) {
-                return Functions.fromMultiArray(zipped.map(v => <string>v.value._data[0]))
-            }
-
-            return Functions.fromMultiArray(zipped)
+            return MultiArray.zip(a, w, Functions.underBoxInfix(alpha2))
         } ]
     },
     '´': ([alpha1, alpha2]) => {
         return [ (w) => {
-            if (alpha1 == null) throw "Function at .¨ is not prefix"
-
-            const vals = w.value._data.map((n: any) => alpha1(Functions.chooseScalar(n)))
-            let kind = vals.map(v => v.kind).reduce((acc, x) => acc == x ? acc : 'box')
-            let scalars = vals.every(v => v.value.rank == 0)
-
-            if (kind == 'num' && scalars) {
-                return Functions.makeArray(vals.map(v => <number>v.value._data[0]))
-            } else if (kind == 'char' && scalars) {
-                return Functions.makeArray(vals.map(v => <string>v.value._data[0]))
-            }
-
-            return Functions.fromMultiArray(new MultiArray(w.value._shape, vals, w.value._strides))
+            if (alpha1 == null) throw "Function at ´ is not prefix"
+            return Functions.each(alpha1)(w)
         }, (a, w) => {
-            if (alpha2 == null) throw "Function at .¨ is not infix"
-
-            const a_arr = a.value.firstAxisToArray()
-            const w_arr = w.value.firstAxisToArray()
-
-            let data: Value[] = []
-            let data_n: number[] | null = []
-
-            for (const a_slice of a_arr) {
-                for (const w_slice of w_arr) {
-                    const x = Functions.fromMultiArrayUnwrap(a.value.slice(a_slice))
-                    const y = Functions.fromMultiArrayUnwrap(w.value.slice(w_slice))
-
-                    const result = alpha2(x, y)
-
-                    if (data_n) {
-                        if (result.kind == 'num' && result.value.rank == 0) {
-                            data_n.push(result.value._data[0])
-                        } else {
-                            data_n = null
-                        }
-                    }
-
-                    data.push(result)
-                }
-            }
-
-            if (data_n) {
-                return { kind: 'num', value: new MultiArray([a_arr.length, w_arr.length], data_n)}
-            }
-            
-            return { kind: 'box', value: new MultiArray([a_arr.length, w_arr.length], data)}
+            if (alpha2 == null) throw "Function at ´ is not infix"
+            return Functions.table(alpha2)(a, w)
         } ]
     },
     '`': ([alpha1, alpha2]) => {
         return [ (w) => {
             if (alpha1 == null) throw "Function at ` is not prefix"
-
-            let data: Value[] = []
-            let data_n: number[] | null = []
-            let data_c: string[] | null = []
-
-            let shape: number[] | null = null
-
-            for (let index = 0; index < w.value._shape[0]; index++) {
-                const slice = w.value.getFirst(index)
-
-                const result = alpha1(Functions.fromMultiArray(w.value.slice(slice)))
-
-                if (shape == null) {
-                    shape = result.value._shape
-                } else {
-                    if (result.value._shape.length != shape.length || !result.value._shape.every((n, i) => n == (<number[]>shape)[i])) throw "Shape Error"
-                }
-
-                if (data_n) { if (result.kind == 'num') { data_n = data_n.concat(result.value._data) } else { data_n = null } }
-                
-                if (data_c) { if (result.kind == 'char') { data_c = data_c.concat(result.value._data) } else { data_c = null } }
-
-                if (result.kind == 'box') {
-                    data = data.concat(result.value._data)
-                }
-            }
-
-            if (shape == null) return Functions.makeEmpty()
-
-            if (data_n) {
-                return { kind: 'num', value: new MultiArray([w.value._shape[0], ...shape], data_n)}
-            }
-
-            if (data_c) {
-                return { kind: 'char', value: new MultiArray([w.value._shape[0], ...shape], data_c)}
-            }
-
-            return Functions.fromMultiArray(new MultiArray([w.value._shape[0], ...shape], data))
-        }, null ]
-    },
-    '.sum': ([alpha1, alpha2]) => {
-        if (alpha2 == null) throw "Function at .for is not infix"
-        return [ (w) => {
-            
-            let data_n = 0
-
-            for (let index = 0; index < w.value._data.length; index++) {
-                const result = alpha2(Functions.chooseScalar(index), Functions.chooseScalar(w.value._data[index]))
-
-                if (!(result.kind == 'num' && result.value.rank == 0)) {
-                    throw "Domain Error"
-                }
-
-                data_n += result.value._data[0]
-            }
-
-            return Functions.makeScalar(data_n)
+            return Functions.cellsPrefix(alpha1)(w)
         }, (a, w) => {
-            if (a.kind != 'num') throw "Domain Error"
-            if (a.value.rank != 0) throw "Rank Error"
+            if (alpha2 == null) throw "Function at ` is not infix"
 
-            const step = a.value._data[0] ?? 1
+            if (a.rank == 0) return Functions.cellsPrefix((w) => alpha2(a, w))(w)
+            
+            if (w.rank == 0) return Functions.cellsPrefix((a) => alpha2(a, w))(a)
 
-            let data_n = 0
-
-            for (let index = 0; index < w.value._data.length; index++) {
-                const result = alpha2(Functions.chooseScalar(step ** index), Functions.chooseScalar(w.value._data[index]))
-
-                if (!(result.kind == 'num' && result.value.rank == 0)) {
-                    throw "Domain Error"
-                }
-
-                data_n += result.value._data[0]
-            }
-
-            return Functions.makeScalar(data_n)
-        }]
-    }
+            return Functions.cellsInfix(alpha2)(a, w)
+        } ]
+    },
 }
 
 const builtin_dyads: DyadMap = {
@@ -636,11 +408,7 @@ const builtin_dyads: DyadMap = {
                 if (alpha1 == null) throw "Left function at ↑ is not prefix"
                 if (omega1 == null) throw "Right function at ↑ is not prefix"
 
-                const n_ = omega1(w)
-                if (n_.kind != 'num') throw "Domain Error"
-                if (n_.value.rank != 0) throw "Rank Error"
-            
-                const n = n_.value._data[0] ?? 0
+                const n = Functions.takeScalar(omega1(w))
 
                 let result = w
                 for (let i = 0; i < n; ++i) { result = alpha1(result) }
@@ -649,10 +417,7 @@ const builtin_dyads: DyadMap = {
             (a, w) => {
                 if (alpha2 == null) throw "Left function at ↑ is not infix"
                 if (omega2 == null) throw "Right function at ↑ is not infix"
-                const n_ = omega2(a, w)
-                if (n_.kind != 'num') throw "Domain Error"
-                if (n_.value.rank != 0) throw "Rank Error"
-                const n = n_.value._data[0] ?? 0
+                const n = Functions.takeScalar(omega2(a, w))
                 let result = w
                 for (let i = 0; i < n; ++i) { result = alpha2(a, result) }
                 return result
@@ -778,7 +543,7 @@ function evaluate(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMap): V
 
         case ExprKind.String:
             if (e.value.length == 1) {
-                return Functions.makeChar(e.value)    
+                return Functions.makeScalar(e.value)
             }
 
             return Functions.makeString(e.value)
@@ -793,22 +558,7 @@ function evaluate(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMap): V
             if (e.value.length == 0) {
                 return Functions.makeEmpty()
             }
-
-            if (e.vkind == 'num') {
-                const vals = e.value.map(e => (<{value: number}>e).value)
-                return Functions.makeArray(vals)
-            }
-
-            let vals = e.value.map(e => evaluate(e, self, globals, funcs))
-            let kind = vals.map(v => v.kind).reduce((acc, x) => acc == x ? acc : 'box')
-            let scalars = vals.every(v => v.value.rank == 0)
-
-            if (kind == 'num' && scalars) {
-                return Functions.makeArray(vals.map(v => <number>v.value._data[0]))
-            } else if (kind == 'char' && scalars) {
-                return Functions.makeArray(vals.map(v => <string>v.value._data[0]))
-            }
-
+            let vals = e.value.map(e => Functions.unwrapBox(evaluate(e, self, globals, funcs)))
             return Functions.makeArray(vals)
         }
         

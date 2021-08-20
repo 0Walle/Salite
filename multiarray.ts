@@ -188,6 +188,7 @@ export class MultiArray<T> {
 
 	reshape(shape: number[]): MultiArray<T> {
 		const length = Math.floor(shape.reduce((a, b) => a * b, 1))
+		if (isNaN(length)) throw "Length Error"
 		if (length < 0) throw "Length Error"
 		
 		if (length > this._data.length) {
