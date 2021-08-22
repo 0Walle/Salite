@@ -184,29 +184,30 @@ export function takeNumbers(x: Value): number[] {
     return n
 }
 
+function gen_iota(len: number, f: (n: number) => number): number[] {
+    return Array(len).fill(undefined).map((_, i) => f(i))
+}
+
 // *Transpose
 export const reverse: Prefix = (v) => {
-    if (v.rank == 0) return v
-
-    const slices = v.firstAxisToArray()
-    return v.select(slices.reverse())
+    const len = v.length
+    if (len === undefined) return v
+    const slices = gen_iota(len, i => len - 1 - i)
+    return v.select(slices)
 }
 
 export const rotate: Infix = (x, y) => {
     const n = takeScalar(x)
+    const len = y.length
 
-    if (y.rank == 0) return y
-
-    const slices = y.firstAxisToArray()
+    if (len === undefined) return y
 
     let rotated_slices
 
     if (n > 0) {
-        const removed = slices.splice(0, n % slices.length)
-        rotated_slices = [...slices, ...removed]
+        rotated_slices = Array(len).fill(0).map((_, i) => (i + (n % len)) % len)
     } else {
-        const removed = slices.splice(0, (slices.length + n) % slices.length)
-        rotated_slices = [...slices, ...removed]
+        rotated_slices = Array(len).fill(0).map((_, i) => (i + (len - n % len)) % len)
     }
 
     const rotated = y.select(rotated_slices)
@@ -216,25 +217,26 @@ export const rotate: Infix = (x, y) => {
 
 export const take: Infix = (x, y) => {
     const n = takeScalar(x)
+    const len = y.length
+    if (len === undefined) return y
     
-    const slices = y.firstAxisToArray()
-    if (n > 0) {
-        return y.select(slices.slice(0, n))
+    if (n >= 0) {
+        return y.select(gen_iota(n, i => i))
     } 
 
-    return y.select(slices.slice(slices.length + n))
+    return y.select(gen_iota(-n, i => len + n + i))
 }
 
 export const drop: Infix = (x, y) => {
     const n = takeScalar(x)
+    const len = y.length
+    if (len === undefined) return y
 
-    const slices = y.firstAxisToArray()
-
-    if (n > 0) {
-        return y.select(slices.slice(n))
+    if (n >= 0) {
+        return y.select(gen_iota(len - n, i => i + n))
     }
 
-    return y.select(slices.slice(0, n))
+    return y.select(gen_iota(len + n, i => i))
 }
 
 export const first: Prefix = (x) => {
@@ -271,9 +273,8 @@ export const select: Infix = (x, y) => {
         return y.slice(slice)
     }
 
-    let n = takeNumbers(x)
-    const slices = n.map(i => y.getFirst(i))
-    return y.select(slices)
+    let n = takeNumbers(x.deshape())
+    return y.select(n).reshape([...x._shape, ...y._shape.slice(1)])
 }
 
 export const membership: Infix = (y, x) => {
@@ -309,9 +310,8 @@ export const replicate: Infix = (x, y) => {
     if (y.length !== indices_list.length) throw "Lenght Error"
 
     const indices = indices_list.flatMap((n, i) => <number[]>(Array(n).fill(i)))
-    const slices = indices.map((i) => y.getFirst(i))
 
-    return y.select(slices)
+    return y.select(indices)
 }
 
 export const mark_firsts: Prefix = (x) => {
@@ -333,14 +333,14 @@ export const unique: Prefix = (x) => {
 export const group: Infix = (x, y) => {
     const groups = takeNumbers(x)
 
-    let data: Slice[][] = []
+    let data: number[][] = []
 
     for (let i = 0; i < groups.length; i++) {
         const n = groups[i]
 
         if (n < 0) continue
 
-        const slice = y.getFirst(i)
+        const slice = i
 
         if (data[n] == undefined) {
             data[n] = [slice]

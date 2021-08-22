@@ -1,21 +1,3 @@
-function* partition<T>(array: T[], size: number) {
-	let i: number = 0
-	while (i < array.length) {
-		yield array.slice(i, i + size)
-		i += size
-	}
-}
-
-function* zipartition<T>(a: T[], b: T[], sizea: number, sizeb: number) {
-	let i: number = 0
-	let j: number = 0
-	while (i < a.length) {
-		yield [a.slice(i, i + sizea), b.slice(j, j + sizeb)]
-		i += sizea
-		j += sizeb
-	}
-}
-
 const _same_shape = (x: number[], y: number[]) => {
     return x.length == y.length && x.every((n, i) => y[i] == n)
 }
@@ -255,26 +237,32 @@ export class MultiArray<T> {
 		const stride = this._strides[0]
 
 		return { start: index * stride, end: (index + 1) * stride, shape }
-
-		// return new MultiArray(shape, this._data.slice(index * stride, (index + 1) * stride))
 	}
 
 	slice(s: Slice): MultiArray<T> {
 		return new MultiArray(s.shape, this._data.slice(s.start, s.end))
 	}
 
-	select(slices: Slice[]): MultiArray<T> {
-		if (slices.length == 0) return new MultiArray([], [])
+	select(cells: number[]): MultiArray<T> {
+		if (this.length == undefined) throw "Rank Error"
+
+		if (cells.length == 0) return new MultiArray([], [])
 
 		let new_data: T[] = []
 
-		let shape = slices[0].shape
+		let shape = this._shape.slice(1)
 
-		for (let i = 0; i < slices.length; i++) {
-			const slice = slices[i]
-			new_data = new_data.concat(this._data.slice(slice.start, slice.end))
+		for (let i = 0; i < cells.length; i++) {
+			let cell = cells[i]
+			
+			if (cell < 0) cell = this.length + cell
+
+			if (cell >= this.length) throw "Lenght Error"
+			if (cell < 0) throw "Lenght Error"
+
+			new_data = new_data.concat(this._data.slice(cell * this._strides[0], (cell + 1) * this._strides[0]))
 		}
 
-		return new MultiArray([slices.length ,...shape], new_data)
+		return new MultiArray([cells.length ,...shape], new_data)
 	}
 }
