@@ -240,16 +240,20 @@ class MultiArray {
     slice(s) {
         return new MultiArray(s.shape, this._data.slice(s.start, s.end));
     }
-    select(slices) {
-        if (slices.length == 0) return new MultiArray([], []);
+    select(cells) {
+        if (this.length == undefined) throw "Rank Error";
+        if (cells.length == 0) return new MultiArray([], []);
         let new_data = [];
-        let shape2 = slices[0].shape;
-        for(let i = 0; i < slices.length; i++){
-            const slice = slices[i];
-            new_data = new_data.concat(this._data.slice(slice.start, slice.end));
+        let shape2 = this._shape.slice(1);
+        for(let i = 0; i < cells.length; i++){
+            let cell = cells[i];
+            if (cell < 0) cell = this.length + cell;
+            if (cell >= this.length) throw "Lenght Error";
+            if (cell < 0) throw "Lenght Error";
+            new_data = new_data.concat(this._data.slice(cell * this._strides[0], (cell + 1) * this._strides[0]));
         }
         return new MultiArray([
-            slices.length,
+            cells.length,
             ...shape2
         ], new_data);
     }
@@ -440,47 +444,53 @@ function takeNumbers(x) {
     if (n.some(isNaN)) throw "Domain Error";
     return n;
 }
+function gen_iota(len, f) {
+    return Array(len).fill(undefined).map((_, i)=>f(i)
+    );
+}
 const reverse = (v)=>{
-    if (v.rank == 0) return v;
-    const slices = v.firstAxisToArray();
-    return v.select(slices.reverse());
+    const len = v.length;
+    if (len === undefined) return v;
+    const slices = gen_iota(len, (i)=>len - 1 - i
+    );
+    return v.select(slices);
 };
 const rotate = (x, y)=>{
     const n = takeScalar(x);
-    if (y.rank == 0) return y;
-    const slices = y.firstAxisToArray();
+    const len = y.length;
+    if (len === undefined) return y;
     let rotated_slices;
     if (n > 0) {
-        const removed = slices.splice(0, n % slices.length);
-        rotated_slices = [
-            ...slices,
-            ...removed
-        ];
+        rotated_slices = Array(len).fill(0).map((_, i)=>(i + n % len) % len
+        );
     } else {
-        const removed = slices.splice(0, (slices.length + n) % slices.length);
-        rotated_slices = [
-            ...slices,
-            ...removed
-        ];
+        rotated_slices = Array(len).fill(0).map((_, i)=>(i + (len - n % len)) % len
+        );
     }
     const rotated = y.select(rotated_slices);
     return rotated;
 };
 const take = (x, y)=>{
     const n = takeScalar(x);
-    const slices = y.firstAxisToArray();
-    if (n > 0) {
-        return y.select(slices.slice(0, n));
+    const len = y.length;
+    if (len === undefined) return y;
+    if (n >= 0) {
+        return y.select(gen_iota(n, (i)=>i
+        ));
     }
-    return y.select(slices.slice(slices.length + n));
+    return y.select(gen_iota(-n, (i)=>len + n + i
+    ));
 };
 const drop = (x, y)=>{
     const n = takeScalar(x);
-    const slices = y.firstAxisToArray();
-    if (n > 0) {
-        return y.select(slices.slice(n));
+    const len = y.length;
+    if (len === undefined) return y;
+    if (n >= 0) {
+        return y.select(gen_iota(len - n, (i)=>i + n
+        ));
     }
-    return y.select(slices.slice(0, n));
+    return y.select(gen_iota(len + n, (i)=>i
+    ));
 };
 const first = (x)=>{
     if (!x._data[0]) return makeEmpty();
@@ -511,10 +521,11 @@ const select = (x, y)=>{
         const slice = y.getFirst(n ?? 0);
         return y.slice(slice);
     }
-    let n = takeNumbers(x);
-    const slices = n.map((i)=>y.getFirst(i)
-    );
-    return y.select(slices);
+    let n = takeNumbers(x.deshape());
+    return y.select(n).reshape([
+        ...x._shape,
+        ...y._shape.slice(1)
+    ]);
 };
 const membership = (y, x)=>{
     const __final = y.map((a)=>{
@@ -545,9 +556,7 @@ const replicate = (x, y)=>{
     if (y.length !== indices_list.length) throw "Lenght Error";
     const indices1 = indices_list.flatMap((n, i)=>Array(n).fill(i)
     );
-    const slices = indices1.map((i)=>y.getFirst(i)
-    );
-    return y.select(slices);
+    return y.select(indices1);
 };
 const mark_firsts = (x)=>{
     if (x.rank != 1) throw "Shape Error";
@@ -572,7 +581,7 @@ const group = (x, y)=>{
     for(let i = 0; i < groups.length; i++){
         const n = groups[i];
         if (n < 0) continue;
-        const slice = y.getFirst(i);
+        const slice = i;
         if (data1[n] == undefined) {
             data1[n] = [
                 slice
