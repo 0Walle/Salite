@@ -128,7 +128,7 @@ export const cmp_ne: Infix = (x, y) => {
 }
 
 function match_values(a: Value, b: Value): boolean {
-    return a.match(b, (x, y) => !cmp_scalar_eq(x, y))
+    return a.match(b, (x, y) => !!cmp_scalar_eq(x, y))
 }
 
 export const match: Infix = (x, y) => makeScalar(+match_values(x, y))
@@ -213,6 +213,26 @@ export const rotate: Infix = (x, y) => {
     const rotated = y.select(rotated_slices)
     return rotated
 
+}
+
+export const transpose: Prefix = (v) => {
+    if (v.rank < 2) return v
+
+    console.log(v._strides)
+
+    const first = v._shape[0]
+    const tail = v._strides[0]
+
+    const data = new Array(v._data.length)
+    let k = 0
+
+    for (let j = 0; j < tail; j++) {        
+        for (let i = 0; i < first; i++) {
+            data[k++] = v._data[i * tail + j]
+        }
+    }
+
+    return new MultiArray([...v._shape.slice(1), first], data)
 }
 
 export const take: Infix = (x, y) => {
@@ -407,7 +427,7 @@ export const find: Infix = (pat, x) => {
 
     const result = new Array(x_len).fill(0)
 
-    for (let i = 0; i < x_len - pat_len; i++) {
+    for (let i = 0; i < x_len - pat_len + 1; i++) {
         let got = 1
         for (let j = 0; j < pat_cells.length; j++) {
             const pat_c = pat.slice(pat_cells[j])

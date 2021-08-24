@@ -60,8 +60,8 @@ function pretty_value_(v: Value): string[] {
 
                 return [
                     `┌`.padEnd(len+4),
-                    `  ${string[0]}`,
-                    ...string.slice(1).map(s => '  ' + s),
+                    `  ${string[0]}  `,
+                    ...string.slice(1).map(s => '  ' + s + '  '),
                     `${' '.repeat(len+3)}┘`
                 ]
             }
@@ -105,8 +105,8 @@ function pretty_value_(v: Value): string[] {
 
         return [
             `┌─`.padEnd(len+4),
-            `│ ${layers[0]}`,
-            ...layers.slice(1).map(ss => '  ' + ss),
+            `│ ${layers[0]}  `,
+            ...layers.slice(1).map(ss => '  ' + ss + '  '),
             `${' '.repeat(len+3)}┘`
         ]
     }
@@ -133,8 +133,8 @@ function pretty_value_(v: Value): string[] {
 
         return [
             `┌─`.padEnd(padded[0].length+4),
-            `│ ${padded[0]}`,
-            ...padded.slice(1).map(x => '  ' + x),
+            `│ ${padded[0]}  `,
+            ...padded.slice(1).map(x => '  ' + x + '  '),
             `${' '.repeat(padded[0].length+3)}┘`
         ]
     }
@@ -143,9 +143,9 @@ function pretty_value_(v: Value): string[] {
 
     return [
         `┌~${v._shape.join(' ')}`.padEnd(len+4),
-        `╵ ${strings[0][0]}`,
-        ...strings[0].slice(1).map(s => '  ' + s),
-        ...strings.slice(1).flatMap(s => s.map(s => '  ' + s).join('\n')),
+        `╵ ${strings[0][0]}  `,
+        ...strings[0].slice(1).map(s => '  ' + s + '  '),
+        ...strings.slice(1).flatMap(s => s.map(s => '  ' + s + '  ').join('\n')),
         `${' '.repeat(len+3)}┘`
     ]
 }
@@ -180,6 +180,7 @@ const builtin_functions: FuncMap = {
     'ι': [Functions.iota, Functions.indexof],
     'ρ': [Functions.shape, Functions.reshape],
     'φ': [Functions.reverse, Functions.rotate],
+    ':φ': [Functions.transpose, null],
     'μ': [Functions.group_indices, Functions.group],
 
     'ε': [Functions.mark_firsts, Functions.membership],
@@ -731,6 +732,7 @@ export const symbol_names = {
         'ι': ['Range', 'Indexof'],         // num-1 --- num-1
         'ρ': ['Shape', 'Reshape'],         // num-1 --- any
         'φ': ['Reverse', 'Rotate'],        // any   --- any
+        ':φ': ['Transpose', null],        // any   --- any
         'μ': ['Group Indices', 'Group'],   // box   --- box
 
         'ε': ['Mark Firsts', 'Membership'],
