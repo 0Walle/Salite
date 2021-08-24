@@ -392,7 +392,7 @@ const cmp_ne = (x, y)=>{
     );
 };
 function match_values(a, b) {
-    return a.match(b, (x, y)=>!cmp_scalar_eq(x, y)
+    return a.match(b, (x, y)=>!!cmp_scalar_eq(x, y)
     );
 }
 const match = (x, y)=>makeScalar(+match_values(x, y))
@@ -469,6 +469,23 @@ const rotate = (x, y)=>{
     }
     const rotated = y.select(rotated_slices);
     return rotated;
+};
+const transpose = (v)=>{
+    if (v.rank < 2) return v;
+    console.log(v._strides);
+    const first = v._shape[0];
+    const tail = v._strides[0];
+    const data1 = new Array(v._data.length);
+    let k = 0;
+    for(let j = 0; j < tail; j++){
+        for(let i = 0; i < first; i++){
+            data1[k++] = v._data[i * tail + j];
+        }
+    }
+    return new MultiArray([
+        ...v._shape.slice(1),
+        first
+    ], data1);
 };
 const take = (x, y)=>{
     const n = takeScalar(x);
@@ -635,7 +652,7 @@ const find = (pat, x)=>{
     const pat_cells = pat.firstAxisToArray();
     const cells = x.firstAxisToArray();
     const result = new Array(x_len).fill(0);
-    for(let i = 0; i < x_len - pat_len; i++){
+    for(let i = 0; i < x_len - pat_len + 1; i++){
         let got = 1;
         for(let j = 0; j < pat_cells.length; j++){
             const pat_c = pat.slice(pat_cells[j]);
@@ -1464,8 +1481,8 @@ function pretty_value_(v1) {
                     let len = string[0].length;
                     return [
                         `┌`.padEnd(len + 4),
-                        `  ${string[0]}`,
-                        ...string.slice(1).map((s)=>'  ' + s
+                        `  ${string[0]}  `,
+                        ...string.slice(1).map((s)=>'  ' + s + '  '
                         ),
                         `${' '.repeat(len + 3)}┘`
                     ];
@@ -1512,8 +1529,8 @@ function pretty_value_(v1) {
         const len = layers[0].length;
         return [
             `┌─`.padEnd(len + 4),
-            `│ ${layers[0]}`,
-            ...layers.slice(1).map((ss)=>'  ' + ss
+            `│ ${layers[0]}  `,
+            ...layers.slice(1).map((ss)=>'  ' + ss + '  '
             ),
             `${' '.repeat(len + 3)}┘`
         ];
@@ -1543,8 +1560,8 @@ function pretty_value_(v1) {
         );
         return [
             `┌─`.padEnd(padded[0].length + 4),
-            `│ ${padded[0]}`,
-            ...padded.slice(1).map((x)=>'  ' + x
+            `│ ${padded[0]}  `,
+            ...padded.slice(1).map((x)=>'  ' + x + '  '
             ),
             `${' '.repeat(padded[0].length + 3)}┘`
         ];
@@ -1553,10 +1570,10 @@ function pretty_value_(v1) {
     ));
     return [
         `┌~${v1._shape.join(' ')}`.padEnd(len + 4),
-        `╵ ${strings[0][0]}`,
-        ...strings[0].slice(1).map((s)=>'  ' + s
+        `╵ ${strings[0][0]}  `,
+        ...strings[0].slice(1).map((s)=>'  ' + s + '  '
         ),
-        ...strings.slice(1).flatMap((s)=>s.map((s1)=>'  ' + s1
+        ...strings.slice(1).flatMap((s)=>s.map((s1)=>'  ' + s1 + '  '
             ).join('\n')
         ),
         `${' '.repeat(len + 3)}┘`
@@ -1666,6 +1683,10 @@ const builtin_functions = {
     'φ': [
         reverse,
         rotate
+    ],
+    ':φ': [
+        transpose,
+        null
     ],
     'μ': [
         group_indices,
@@ -2411,6 +2432,10 @@ const symbol_names1 = {
         'φ': [
             'Reverse',
             'Rotate'
+        ],
+        ':φ': [
+            'Transpose',
+            null
         ],
         'μ': [
             'Group Indices',
