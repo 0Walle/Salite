@@ -261,25 +261,49 @@ export const drop: Infix = (x, y) => {
 
 export const first: Prefix = (x) => {
     if (!x._data[0]) return makeEmpty()
-    return makeScalar(x._data[0])
+    return makeBox(x._data[0])
 }
 
 export const first_cell: Prefix = (y) => {
-    const final = y.getFirst(0)
-    return y.slice(final)
+    const first = y.slice(y.getFirst(0))
+    if (first.rank == 0) return makeBox(first._data[0])
+    return first
 }
 
 export const pick: Infix = (x, y) => {
     if (x.rank == 0) {
         const n = takeScalar(x)
-        return makeScalar(y._data[n])
+        return makeBox(y._data[n])
     }
 
     try {
         let n = takeNumbers(x)
-        return makeScalar(y.get(n))
+        return makeBox(y.get(n))
     } catch {
-        const result = x.map(i => pick(makeScalar(i), y)._data[0])
+        const result = x.map(i => pick(makeBox(i), y)._data[0])
+        return result
+    }
+}
+
+export const pick_indexes: (a: Value, w: Value) => number[] = (a, w) => {
+
+    const j = w._data
+
+    if (a.rank == 0) {
+        const n = takeScalar(a)
+        return [n]
+    }
+
+    try {
+        let n = takeNumbers(a)
+
+        if (n.length != w._shape.length) throw "Length Error"
+        const i = n.map((x, i) => (x < 0 ? w._shape[i] + x : x) * w._strides[i]).reduce((a, b) => a + b)
+        if (i >= w._data.length) throw "Index Error"
+
+        return [i]
+    } catch {
+        const result = a.map(i => pick_indexes(makeBox(i), w))._data.flat()
         return result
     }
 }

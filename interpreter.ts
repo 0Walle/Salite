@@ -1,4 +1,4 @@
-import { MultiArray } from "./multiarray.ts"
+import { MultiArray, Slice } from "./multiarray.ts"
 import * as Functions from "./functions.ts"
 import { Value, Prefix, Infix } from "./functions.ts"
 import { parse, Expr, ExprKind, tokenize, Token, TokenType, pretty_expr } from "./parser.ts"
@@ -232,6 +232,7 @@ const builtin_functions: FuncMap = {
 
         return w
     }, null],
+    'Type': [(w) => w.map(x => ({s:' ',n: 0,o: Functions.makeEmpty()}[<'s'|'n'|'o'>(typeof x)[0]])), null],
     '?': [null, (a, w) => {
         if (w._data[0] == undefined) return a
         return w
@@ -245,6 +246,7 @@ const builtin_functions_undo: { [name: string]: [((before: Value) => Prefix) | n
     '-': [() => Functions.neg, (f) => (a, w) => Functions.add(f(w), a)],
     '~': [() => Functions.not, null],
     'φ': [() => Functions.reverse, (f) => (a, w) => Functions.rotate(Functions.neg(a), f(w))],
+    ':φ': [() => Functions.transpose, null],
 
     '%': [() => Functions.recp, (f) => (a, w) => Functions.div(f(w), a)],
     '^': [() => Functions.ln, (f) => (a, w) => Functions.log(a, f(w))],
@@ -266,7 +268,16 @@ const builtin_functions_undo: { [name: string]: [((before: Value) => Prefix) | n
         new_data[0] = x._data[0]
 
         return new MultiArray(before._shape, new_data, before._strides)
-    }, null],
+    }, (f) => (a, w) => {
+
+        const j = w._data
+
+        Functions.pick_indexes(a, w).forEach(i => {
+            j[i] = Functions.unwrapBox(f(Functions.makeBox(w._data[i])))
+        })
+
+        return new MultiArray(w._shape, j, w._strides)
+    }],
     ':¢': [(before) => (x) => {
         const new_data = [...before._data]
 
@@ -281,8 +292,35 @@ const builtin_functions_undo: { [name: string]: [((before: Value) => Prefix) | n
         }
 
         return new MultiArray(before._shape, new_data, before._strides)
-    }, null],
-    '$': [() => Functions.under_indices, (f) => (a, w) => {        
+    }, (f) => (a, w) => {
+
+        const j = w._data
+
+        if (w.rank == 0) throw "Rank Error"
+
+        const select = (slice: Slice) => {
+            const value = f(w.slice(slice))
+
+            if ( slice.shape.length != value.rank && !slice.shape.every((n, i) => n == value._shape[i])) throw "Shape Error"
+            
+            for (let i = slice.start, k = 0; i < slice.end; i++) {
+                j[i] = value._data[k++]
+            }
+        }
+
+        if (a.rank == 0) {
+            let n = Functions.takeScalar(a)
+            const slice = w.getFirst(n ?? 0)
+            select(slice)
+
+            return new MultiArray(w._shape, j, w._strides)
+        }
+
+        let n = Functions.takeNumbers(a.deshape())
+        n.forEach(i => select(w.getFirst(i)))
+        return new MultiArray(w._shape, j, w._strides)
+    }],
+    '$': [() => Functions.under_indices, (f) => (a, w) => {
         const indices = Functions.takeNumbers(a)
 
         if (indices.length != w.length) throw "Length Error"
@@ -306,6 +344,20 @@ const builtin_functions_undo: { [name: string]: [((before: Value) => Prefix) | n
         }
 
         return new MultiArray(w._shape, data, w._strides)
+    }],
+    ':<': [null, (f) => (a, w) => {
+        const n = Functions.takeScalar(a)
+        if (n >= 0) {
+            return Functions.join(f(Functions.take(a, w)), Functions.drop(a, w))    
+        }
+        return Functions.join(Functions.drop(a, w),f(Functions.take(a, w)))
+    }],
+    ':>': [null, (f) => (a, w) => {
+        const n = Functions.takeScalar(a)
+        if (n >= 0) {
+            return Functions.join(Functions.take(a, w), f(Functions.drop(a, w)))
+        }
+        return Functions.join(f(Functions.drop(a, w)), Functions.take(a, w))
     }],
 }
 
