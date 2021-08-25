@@ -511,23 +511,48 @@ const drop = (x, y)=>{
 };
 const first = (x)=>{
     if (!x._data[0]) return makeEmpty();
-    return makeScalar(x._data[0]);
+    return makeBox(x._data[0]);
 };
 const first_cell = (y)=>{
-    const __final = y.getFirst(0);
-    return y.slice(__final);
+    const first1 = y.slice(y.getFirst(0));
+    if (first1.rank == 0) return makeBox(first1._data[0]);
+    return first1;
 };
 const pick = (x, y)=>{
     if (x.rank == 0) {
         const n = takeScalar(x);
-        return makeScalar(y._data[n]);
+        return makeBox(y._data[n]);
     }
     try {
         let n = takeNumbers(x);
-        return makeScalar(y.get(n));
+        return makeBox(y.get(n));
     } catch  {
-        const result = x.map((i)=>pick(makeScalar(i), y)._data[0]
+        const result = x.map((i)=>pick(makeBox(i), y)._data[0]
         );
+        return result;
+    }
+};
+const pick_indexes = (a, w)=>{
+    const j = w._data;
+    if (a.rank == 0) {
+        const n = takeScalar(a);
+        return [
+            n
+        ];
+    }
+    try {
+        let n = takeNumbers(a);
+        if (n.length != w._shape.length) throw "Length Error";
+        const i = n.map((x, i1)=>(x < 0 ? w._shape[i1] + x : x) * w._strides[i1]
+        ).reduce((a1, b)=>a1 + b
+        );
+        if (i >= w._data.length) throw "Index Error";
+        return [
+            i
+        ];
+    } catch  {
+        const result = a.map((i1)=>pick_indexes(makeBox(i1), w)
+        )._data.flat();
         return result;
     }
 };
@@ -1774,6 +1799,16 @@ const builtin_functions = {
         },
         null
     ],
+    'Type': [
+        (w)=>w.map((x)=>({
+                    s: ' ',
+                    n: 0,
+                    o: makeEmpty()
+                })[(typeof x)[0]]
+            )
+        ,
+        null
+    ],
     '?': [
         null,
         (a, w)=>{
@@ -1812,6 +1847,11 @@ const builtin_functions_undo = {
         ()=>reverse
         ,
         (f)=>(a, w)=>rotate(neg(a), f(w))
+    ],
+    ':φ': [
+        ()=>transpose
+        ,
+        null
     ],
     '%': [
         ()=>recp
@@ -1863,7 +1903,13 @@ const builtin_functions_undo = {
                 return new MultiArray(before._shape, new_data, before._strides);
             }
         ,
-        null
+        (f)=>(a, w)=>{
+                const j = w._data;
+                pick_indexes(a, w).forEach((i)=>{
+                    j[i] = unwrapBox(f(makeBox(w._data[i])));
+                });
+                return new MultiArray(w._shape, j, w._strides);
+            }
     ],
     ':¢': [
         (before)=>(x)=>{
@@ -1880,7 +1926,28 @@ const builtin_functions_undo = {
                 return new MultiArray(before._shape, new_data, before._strides);
             }
         ,
-        null
+        (f)=>(a, w)=>{
+                const j = w._data;
+                if (w.rank == 0) throw "Rank Error";
+                const select1 = (slice)=>{
+                    const value = f(w.slice(slice));
+                    if (slice.shape.length != value.rank && !slice.shape.every((n, i)=>n == value._shape[i]
+                    )) throw "Shape Error";
+                    for(let i = slice.start, k = 0; i < slice.end; i++){
+                        j[i] = value._data[k++];
+                    }
+                };
+                if (a.rank == 0) {
+                    let n = takeScalar(a);
+                    const slice = w.getFirst(n ?? 0);
+                    select1(slice);
+                    return new MultiArray(w._shape, j, w._strides);
+                }
+                let n = takeNumbers(a.deshape());
+                n.forEach((i)=>select1(w.getFirst(i))
+                );
+                return new MultiArray(w._shape, j, w._strides);
+            }
     ],
     '$': [
         ()=>under_indices
@@ -1904,6 +1971,26 @@ const builtin_functions_undo = {
                     }
                 }
                 return new MultiArray(w._shape, data1, w._strides);
+            }
+    ],
+    ':<': [
+        null,
+        (f)=>(a, w)=>{
+                const n = takeScalar(a);
+                if (n >= 0) {
+                    return join(f(take(a, w)), drop(a, w));
+                }
+                return join(drop(a, w), f(take(a, w)));
+            }
+    ],
+    ':>': [
+        null,
+        (f)=>(a, w)=>{
+                const n = takeScalar(a);
+                if (n >= 0) {
+                    return join(take(a, w), f(drop(a, w)));
+                }
+                return join(f(drop(a, w)), take(a, w));
             }
     ]
 };
