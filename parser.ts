@@ -1,5 +1,5 @@
 export enum TokenType {
-    Func, Monad, Dyad, RParen, LParen, RBrack, LBrack, Number, Id, String, ListStart, ListEnd, Sep, Empty, Error, Define, Comment
+    Func, Monad, Dyad, RParen, LParen, RBrack, LBrack, Number, Id, String, ListStart, ListEnd, Sep, Empty, Error, Define, Comment, Pipe
 }
 
 export class Token {
@@ -22,6 +22,8 @@ export class Token {
 
     static RBrack() { return new Token(TokenType.RBrack) }
     static LBrack() { return new Token(TokenType.LBrack) }
+
+    static Pipe() { return new Token(TokenType.Pipe) }
 
     static ListStart() { return new Token(TokenType.ListStart) }
     static ListEnd() { return new Token(TokenType.ListEnd) }
@@ -99,6 +101,10 @@ export function tokenize(text: string, quiet = false): Token[] {
             tokens.push(Token.Sep().span(col, 1))
             col += 1
             text = text.slice(1)
+        } else if (text[0] == '|') {
+            tokens.push(Token.Pipe().span(col, 1))
+            col += 1
+            text = text.slice(1)
         } else if (text[0] == 'π') {
             tokens.push(Token.Number(Math.PI).span(col, 1))
             col += 1
@@ -168,7 +174,7 @@ export function tokenize(text: string, quiet = false): Token[] {
 }
 
 export enum ExprKind {
-    Number, Id, String, Prefix, Infix, Func, Monad, Dyad, Fork, Train, Vector, Defn
+    Number, Id, String, Prefix, Infix, Func, Monad, Dyad, Fork, Train, Vector, Defn, Decl, Guard
 }
 
 export type Expr
@@ -183,7 +189,9 @@ export type Expr
     | { kind: ExprKind.Dyad, mod: string, alpha: Expr, omega: Expr }
     | { kind: ExprKind.Fork, infix: Expr, alpha: Expr, omega: Expr }
     | { kind: ExprKind.Train, alpha: Expr, omega: Expr }
-    | { kind: ExprKind.Defn, fn: Expr}
+    | { kind: ExprKind.Defn, fn: Expr[] }
+    | { kind: ExprKind.Decl, name: string, is_func: boolean, value: Expr }
+    | { kind: ExprKind.Guard, expr: Expr, fall: Expr }
 
 // type Expr = {
 //     arity: 0 | 1 | 2,
@@ -248,7 +256,13 @@ export function pretty_expr(e: Expr): string {
             return `${pretty_expr(e.alpha)}${e.mod}(${pretty_expr(e.omega)})`
 
         case ExprKind.Defn:
-            return `{${pretty_expr(e.fn)}}`
+            return `{${e.fn.map(pretty_expr).join(', ')}}`
+        
+        case ExprKind.Decl:
+            return `${e.name} :: ${pretty_expr(e.value)}`
+
+        case ExprKind.Guard:
+            return `${pretty_expr(e.expr)} | ${pretty_expr(e.fall)}`
     }
 }
 
@@ -262,6 +276,49 @@ function is_func(e: Expr): boolean {
     if (e.kind == ExprKind.Train) return true
     if (e.kind == ExprKind.Defn) return true
     return false
+}
+
+function parse_try_def_or_guard(ctx: PCtx): Expr | null {
+    if (ctx.code.length == 0) return null
+
+    let [tk, ...tail] = ctx.code
+
+    switch (tk.kind) {
+        case TokenType.Id:
+        case TokenType.Func: {
+            const [is_def, ...tail_] = tail
+
+            if (is_def.kind != TokenType.Define) break
+
+            ctx.code = tail_
+
+            const expr = parse_expr(ctx)
+
+            if (expr == null) throw "Invalid code, expected expression"
+
+            if ((tk.kind == TokenType.Func) != is_func(expr)) {
+                throw `Invalid code, expected ${tk.kind == TokenType.Func ? 'function' : 'value'}`
+            }
+
+            return { kind: ExprKind.Decl, is_func: tk.kind == TokenType.Func, name: <string>tk.value, value: expr }
+        }
+    }
+
+    let expr = parse_expr(ctx)
+    if (expr == null) return null
+
+    ;[tk, ...tail] = ctx.code
+
+    if (tk?.kind == TokenType.Pipe) {
+        ctx.code = tail
+
+        const fall = parse_expr(ctx)
+        if (fall == null) throw "Invalid code, expected expression"
+
+        expr = { kind: ExprKind.Guard, expr: expr, fall: fall }
+    }
+    
+    return expr
 }
 
 function parse_try_func_or_subj(ctx: PCtx): Expr | null {
@@ -323,17 +380,29 @@ function parse_try_func_or_subj(ctx: PCtx): Expr | null {
             return Expr_Func(<string>tk.value)
         case TokenType.LBrack: {
             ctx.code = tail
-            let expr = parse_expr(ctx)
-            if (ctx.code[0].kind != TokenType.RBrack) throw "Invalid code, expected }"
+
+            let exprs = []
+
+            while (true) {
+
+                let expr = parse_try_def_or_guard(ctx)
+
+                if (expr === null) throw "Invalid code in defn"
+                if (is_func(expr)) { throw "Invalid code in defn" }
+
+                exprs.push(expr)
+
+                if (ctx.code[0].kind == TokenType.RBrack) break
+
+                if (ctx.code[0].kind != TokenType.Sep) throw "Invalid Code, expected separator"
+                // if (ctx.code[0].kind != TokenType.RBrack) throw "Invalid code, expected }"
+                ctx.code = ctx.code.slice(1)
+            }
+            
             ctx.code = ctx.code.slice(1)
 
-            if (expr === null) throw "Invalid code in defn"
 
-            if (is_func(expr)) {
-                throw "Invalid code in defn"
-            }
-
-            return { kind: ExprKind.Defn, fn: expr } 
+            return { kind: ExprKind.Defn, fn: exprs } 
         }
         default:
             // console.log("Found ", tk)
@@ -446,7 +515,7 @@ function parse_derv(ctx: PCtx, first?: Expr): Expr | null {
         // throw new Error(`Invalid code, expected function :: ${result}, ${ctx.code}`)
     }
 
-    if (!is_func(result)) throw `Invalid code, expected function`
+    if (!is_func(result)) throw `Invalid code, expected function found ${result.kind}`
 
     return result
 }
@@ -456,7 +525,7 @@ function parse_expr(ctx: PCtx): Expr | null {
         return null
     }
 
-    if (ctx.code[0].kind == TokenType.RParen || ctx.code[0].kind == TokenType.Sep || ctx.code[0].kind == TokenType.ListEnd) {
+    if (ctx.code[0].kind == TokenType.RParen || ctx.code[0].kind == TokenType.Sep || ctx.code[0].kind == TokenType.Pipe || ctx.code[0].kind == TokenType.ListEnd) {
         return null
     }
 
@@ -500,39 +569,55 @@ function parse_expr(ctx: PCtx): Expr | null {
     return { kind: ExprKind.Prefix, func, omega }
 }
 
-export function parse(text: string): {expr: Expr, vars: { [name: string]: Expr }, funcs: { [name: string]: Expr } } {
+// export function parse(text: string): {expr: Expr, vars: { [name: string]: Expr }, funcs: { [name: string]: Expr } } {
+export function parse(text: string): Expr[] {
     let tk = tokenize(text)
 
-    let defs: { [name: string]: Expr } = {}
-    let funcs: { [name: string]: Expr } = {}
-
     let ctx = { code: tk }
-    while (ctx.code.length > 2 && ctx.code[1].kind == TokenType.Define) {
-        let name = ctx.code[0]
-        ctx.code = ctx.code.slice(2)
-        let r = parse_expr(ctx)
 
-        if (r == null) throw "Error in definition"
-        
-        if (name.kind == TokenType.Id && !is_func(r)) {
-            defs[<string>name.value] = r
-        } else if (name.kind == TokenType.Func && is_func(r)) {
-            funcs[<string>name.value] = r
-        } else {
-            throw "Error in definition"
-        }
-        
-        if (!(ctx.code.length > 0 && ctx.code[0].kind == TokenType.Sep))
-            throw "Invalid code"
+    let exprs = []
+    while (true) {
 
-        ctx.code = ctx.code.slice(1)
+        const expr = parse_try_def_or_guard(ctx)
+
+        if (expr == null) throw "Invalid code"
+
+        exprs.push(expr)
+
+        if (ctx.code.length == 0) break
+
+        if (ctx.code[0].kind != TokenType.Sep) throw "Invalid code, expected separator"
+        ctx.code.shift()
     }
 
-    let r = parse_expr(ctx)
+    return exprs
 
-    if (r === null) {
-        throw "Parse Error"
-    }
+    // while (ctx.code.length > 2 && ctx.code[1].kind == TokenType.Define) {
+    //     let name = ctx.code[0]
+    //     ctx.code = ctx.code.slice(2)
+    //     let r = parse_expr(ctx)
 
-    return { expr: r, vars: defs, funcs: funcs }
+    //     if (r == null) throw "Error in definition"
+        
+    //     if (name.kind == TokenType.Id && !is_func(r)) {
+    //         defs[<string>name.value] = r
+    //     } else if (name.kind == TokenType.Func && is_func(r)) {
+    //         funcs[<string>name.value] = r
+    //     } else {
+    //         throw "Error in definition"
+    //     }
+        
+    //     if (!(ctx.code.length > 0 && ctx.code[0].kind == TokenType.Sep))
+    //         throw "Invalid code"
+
+    //     ctx.code = ctx.code.slice(1)
+    // }
+
+    // let r = parse_expr(ctx)
+
+    // if (r === null) {
+    //     throw "Parse Error"
+    // }
+
+    // return { expr: r, vars: defs, funcs: funcs }
 }

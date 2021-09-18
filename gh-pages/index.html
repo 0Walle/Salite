@@ -13,6 +13,8 @@
         body {
             margin: 0px;
             background: transparent;
+            display: flex;
+            flex-direction: column;
         }
 
         .editor-style {
@@ -28,7 +30,7 @@
             line-height: 24px;
 
             width: calc(100% - 20px);
-            height: 150px;
+            height: 200px;
 
             /* overflow: auto; */
         }
@@ -49,7 +51,7 @@
         }
 
         #edit-container {
-            height: 180px;
+            height: 230px;
             position: relative;
         }
 
@@ -66,13 +68,16 @@
             white-space: pre;
             overflow-x: auto;
 
-            line-height: 18px;
+            line-height: 16px;
         }
 
         #salite-symboard {
-            padding: 5px;
+            padding: 10px;
             border: 0;
-            width: calc(100% - 10px);
+            width: calc(100% - 20px);
+            /* width: 100vw; */
+            /* position: absolute; */
+            /* top: 0px; */
             margin-bottom: 10px;
             display: flex;
             flex-wrap: wrap;
@@ -87,13 +92,11 @@
             background-color: #4e4e4e;
         }
 
-        #general-container {
-            width: 70vw;
-            margin-left: auto;
-            margin-right: auto;
-            margin-top: 50px;
+        #salite-symboard .symbol-list-spacer {
+            width: 1em;
+            height: 1em;
         }
-
+        
         .salitehl {
             color: #afafaf;
             white-space: pre;
@@ -104,15 +107,15 @@
         .salitehl-dyad { color: #F6595F; }
         .salitehl-string { color: #66D9EF; }
         .salitehl-const { color: #B649BF; }
+        .salitehl-control { }
         .salitehl-comment { color: #55566b; }
         .salitehl-error { text-decoration: underline wavy #F6595F; }
     </style>
 </head>
 <body>
-    <script type="module" src="./js/salite.js"></script>
+    <script type="module" src="../build/salite.js"></script>
+    <div id="salite-symboard" class="salite-theme"></div>
     <div id='general-container'>
-        <div id="salite-symboard" class="salite-theme">
-        </div>
         <div id="edit-container">
             <textarea id="salite-input" class='editor-style' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
             <div id='salite-code' class='salitehl editor-style'></div>
@@ -120,7 +123,7 @@
         <div id='salite-output' class='salite-theme'>&nbsp;</div>
     </div>
     <script type="module">
-        import { run, tokens, pretty_value, symbol_names, symbol_overstrike } from "./js/salite.js"
+        import { run, tokens, pretty_value, symbol_names, symbol_overstrike, Cast } from "../build/salite.js"
 
         const input = document.getElementById('salite-input')
         const display = document.getElementById('salite-code')
@@ -139,6 +142,12 @@
         }
 
         function init() {
+            function spacer() {
+                const btn = document.createElement('div')
+                btn.classList.add('symbol-list-spacer')
+                symbol_board.appendChild(btn)
+            }
+
             function element(name, title, hl) {
                 const btn = document.createElement('span')
 
@@ -155,24 +164,38 @@
             }
 
             for (const func in symbol_names.functions) {
+                if (func == '∧') spacer();
+                if (func == '≤') spacer();
+                if (func == ';') spacer();
+                if (func == 'δ') spacer();
+
                 element(func, `${symbol_names.functions[func][0] ?? '-'}\n${symbol_names.functions[func][1] ?? '-'}`, 'salitehl-func')
             }
+
+            spacer()
 
             for (const func in symbol_names.monads) {
                 element(func, symbol_names.monads[func], 'salitehl-monad')
             }
 
+            spacer()
+
             for (const func in symbol_names.dyads) {
                 element(func, symbol_names.dyads[func], 'salitehl-dyad')
             }
+
+            spacer()
 
             element('¬', 'Minus', 'salitehl-const')
             element('π', 'Pi', 'salitehl-const')
             element('∞', 'Infinity', 'salitehl-const')
             element('ø', 'Empty', 'salitehl-const')
+
+            spacer()
+
+            element('λ', 'Self Reference', 'salitehl-func')
             element('α', 'Alpha', 'salitehl')
             element('ω', 'Omega', 'salitehl')
-            element('λ', 'Self Reference', 'salitehl-func')
         }
 
         function update() {
@@ -190,6 +213,7 @@
                     case 'const': return `<span class='salitehl-const'>${tk.text}</span>`
                     case 'string': return `<span class='salitehl-string'>${tk.text}</span>`
                     case 'comment': return `<span class='salitehl-comment'>${tk.text}</span>`
+                    case 'control': return `<span class='salitehl-control'>${tk.text}</span>`
                 }
             }).join('')
 
@@ -205,7 +229,9 @@
 
         function run_code() {
             try {
-                let result = run(input.value, {})
+                let result = run(input.value, {}, {
+                    'Prompt': () => Cast.string(prompt())
+                })
     
                 output.innerText = pretty_value(result)
             } catch (e) {

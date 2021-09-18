@@ -43,6 +43,9 @@ export class MultiArray<T> {
 	}
 
 	static zip<S, T, U>(s: MultiArray<S>, t: MultiArray<T>, f: (a: S, b: T) => U): MultiArray<U> {
+		if (s._data.length == 0) return new MultiArray([], [])
+		if (t._data.length == 0) return new MultiArray([], [])
+
 		let [gt, lt] = s._shape.length > t._shape.length ? [s, t] : [t, s]
 
 		if (lt.rank != 0 && !_same_shape(lt._shape, gt._shape.slice(-lt.rank))) throw "Shape Error"

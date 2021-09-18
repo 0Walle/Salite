@@ -491,7 +491,7 @@ export function pretty_value(v: Value): string {
     return pretty_value_(v).join('\n')
 }
 
-function evaluate_func(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMap): FuncDesc {
+function evaluate_func(e: Expr, self: FuncDesc, context_alpha: Value, context_omega: Value, globals: ValueMap, funcs: FuncMap): FuncDesc {
     switch (e.kind) {        
         case ExprKind.Func: {
             if (e.name == 'λ') return self
@@ -502,7 +502,7 @@ function evaluate_func(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMa
             return v
         }
         case ExprKind.Monad: {
-            const alpha = evaluate_func(e.alpha, self, globals, funcs)
+            const alpha = evaluate_func(e.alpha, self, context_alpha, context_omega, globals, funcs)
 
             const monad = builtin_monads[e.mod]
             if (!monad) throw new SaliteError(`Name Error: Undefined name ${e.mod}`)
@@ -518,7 +518,7 @@ function evaluate_func(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMa
                 const [do1, do2] = do_f
                 if (undo) {
                     const [undo1, undo2] = undo
-                    const [alpha1, alpha2] = evaluate_func(e.alpha, self, globals, funcs)
+                    const [alpha1, alpha2] = evaluate_func(e.alpha, self, context_alpha, context_omega, globals, funcs)
                     if (alpha1 == null) throw "Left function at ¤ is not prefix";
                     return [
                         (w) => {
@@ -538,8 +538,8 @@ function evaluate_func(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMa
                 }
             }
 
-            const alpha = evaluate_func(e.alpha, self, globals, funcs)
-            const omega = evaluate_func(e.omega, self, globals, funcs)
+            const alpha = evaluate_func(e.alpha, self, context_alpha, context_omega, globals, funcs)
+            const omega = evaluate_func(e.omega, self, context_alpha, context_omega, globals, funcs)
 
             const dyad = builtin_dyads[e.mod]
             if (!dyad) throw new SaliteError(`Name Error: Undefined name ${e.mod}`)
@@ -547,9 +547,9 @@ function evaluate_func(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMa
             return dyad(alpha, omega)
         }
         case ExprKind.Fork: {
-            const [alpha1,alpha2] = evaluate_func(e.alpha, self, globals, funcs)
-            const [omega1,omega2] = evaluate_func(e.omega, self, globals, funcs)
-            const [_3, infix] = evaluate_func(e.infix, self, globals, funcs)
+            const [alpha1,alpha2] = evaluate_func(e.alpha, self, context_alpha, context_omega, globals, funcs)
+            const [omega1,omega2] = evaluate_func(e.omega, self, context_alpha, context_omega, globals, funcs)
+            const [_3, infix] = evaluate_func(e.infix, self, context_alpha, context_omega, globals, funcs)
 
             if (infix == null) {
                 throw new SaliteArityError(2, 'middle of fork')
@@ -566,8 +566,8 @@ function evaluate_func(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMa
             }]
         }
         case ExprKind.Train: {
-            const [alpha1,_] = evaluate_func(e.alpha, self, globals, funcs)
-            const [omega1,omega2] = evaluate_func(e.omega, self, globals, funcs)
+            const [alpha1,_] = evaluate_func(e.alpha, self, context_alpha, context_omega, globals, funcs)
+            const [omega1,omega2] = evaluate_func(e.omega, self, context_alpha, context_omega, globals, funcs)
 
             if (alpha1 == null) throw new SaliteArityError(1, 'left of atop')
             return [
@@ -576,20 +576,61 @@ function evaluate_func(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMa
             ]
         }
         case ExprKind.Defn: {
+            const last = e.fn[e.fn.length - 1]
+
+            const make_the_things: Infix = (a, w) => {
+                const locals = {...globals}
+                const locals_funcs = {...funcs}
+
+                for (let i = 0; i < e.fn.length - 1; i++) {
+                    const def_or_guard = e.fn[i]
+                    
+                    switch (def_or_guard.kind) {
+                        case ExprKind.Decl: {
+                            if (def_or_guard.is_func) {
+                                const val = evaluate_func(def_or_guard.value, rec, a, w, locals, locals_funcs)
+                                locals_funcs[def_or_guard.name] = val
+                            } else {
+                                const val = evaluate(def_or_guard.value, rec, a, w, locals, locals_funcs)
+                                locals[def_or_guard.name] = val
+                            }
+                            break
+                        }
+                        case ExprKind.Guard: {
+                            const val = evaluate(def_or_guard.expr, rec, a, w, locals, locals_funcs)
+
+                            if (val._data.length == 0) {
+                                return evaluate(def_or_guard.fall, rec, a, w, locals, locals_funcs)
+                            }
+
+                            if (val.rank == 0 && !val._data[0]) {
+                                return evaluate(def_or_guard.fall, rec, a, w, locals, locals_funcs)
+                            }
+
+                            break
+                        }
+                        default:
+                            evaluate(def_or_guard, rec, a, w, locals, locals_funcs)
+                    }
+                }
+
+                return evaluate(last, rec, a, w, locals, locals_funcs)
+            }
+
             const rec: FuncDesc = [
-                (w) => evaluate(e.fn, rec, { 'α': Functions.makeEmpty(), 'ω': w, ...globals}, funcs),
-                (a, w) => evaluate(e.fn, rec, { 'α': a, 'ω': w, ...globals}, funcs)
+                (w) => make_the_things(Functions.makeEmpty(), w),
+                (a, w) => make_the_things(a, w)
             ]
             return rec
         }
         default: {
-            const val = evaluate(e, self, globals, funcs)
+            const val = evaluate(e, self, context_alpha, context_omega, globals, funcs)
             return [() => val, () => val]
         }
     }
 }
 
-function evaluate(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMap): Value {
+function evaluate(e: Expr, self: FuncDesc, context_alpha: Value, context_omega: Value, globals: ValueMap, funcs: FuncMap): Value {
     switch (e.kind) {
         case ExprKind.Number:
             return Functions.makeScalar(e.value)
@@ -602,6 +643,9 @@ function evaluate(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMap): V
             return Functions.makeString(e.value)
         
         case ExprKind.Id: {
+            if (e.value == 'α') return context_alpha
+            if (e.value == 'ω') return context_omega
+
             let v = globals[e.value]
             if (v === undefined) throw new SaliteError(`Name Error: Undefined name ${e.value}`)
             return v
@@ -611,16 +655,16 @@ function evaluate(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMap): V
             if (e.value.length == 0) {
                 return Functions.makeEmpty()
             }
-            let vals = e.value.map(e => Functions.unwrapBox(evaluate(e, self, globals, funcs)))
+            let vals = e.value.map(e => Functions.unwrapBox(evaluate(e, self, context_alpha, context_omega, globals, funcs)))
             return Functions.makeArray(vals)
         }
         
 
         case ExprKind.Prefix: {
-            let func = evaluate_func(e.func, self, globals, funcs)[0]
+            let func = evaluate_func(e.func, self, context_alpha, context_omega, globals, funcs)[0]
             if (func === null) throw new SaliteArityError(1)
 
-            let omega = evaluate(e.omega, self, globals, funcs)
+            let omega = evaluate(e.omega, self, context_alpha, context_omega, globals, funcs)
 
             let result = func(omega)
             return result
@@ -636,11 +680,11 @@ function evaluate(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMap): V
             //     }
             // }
 
-            let func = evaluate_func(e.func, self, globals, funcs)[1]
+            let func = evaluate_func(e.func, self, context_alpha, context_omega, globals, funcs)[1]
             if (func === null) throw new SaliteArityError(2)
 
-            let alpha = evaluate(e.alpha, self, globals, funcs)
-            let omega = evaluate(e.omega, self, globals, funcs)
+            let alpha = evaluate(e.alpha, self, context_alpha, context_omega, globals, funcs)
+            let omega = evaluate(e.omega, self, context_alpha, context_omega, globals, funcs)
 
             let result = func(alpha, omega)
             return result
@@ -652,25 +696,61 @@ function evaluate(e: Expr, self: FuncDesc, globals: ValueMap, funcs: FuncMap): V
     }
 }
 
-export function run(expr: string, globals: ValueMap): Value {
-    let ast = parse(expr)
+export function run(expr: string, globals: ValueMap, foreign: {[s: string]: (w: Value, a?: Value) => Value}): Value {
+    let stmts = parse(expr)
 
     let funcs: FuncMap = {}
 
-    for (const name in ast.funcs) {
-        const fast = ast.funcs[name]
-        const desc = evaluate_func(fast, [null, null], globals, funcs)
-        funcs[name] = desc
+    for (const f in foreign) {
+        funcs[f] = [ foreign[f], foreign[f] ]
     }
 
-    for (const name in ast.vars) {
-        const val = evaluate(ast.vars[name], [null, null], globals, funcs)
-        globals[name] = val
+    let locals: ValueMap = {...globals}
+
+    let self_: FuncDesc = [null, null]
+    let alpha = Functions.makeEmpty()
+    let omega = Functions.makeEmpty()
+
+    for (let i = 0; i < stmts.length - 1; i++) {
+        const def_or_guard = stmts[i]
+        
+        switch (def_or_guard.kind) {
+            case ExprKind.Decl: {
+                if (def_or_guard.is_func) {
+                    const val = evaluate_func(def_or_guard.value, self_, alpha, omega, locals, funcs)
+                    funcs[def_or_guard.name] = val
+                } else {
+                    const val = evaluate(def_or_guard.value, self_, alpha, omega, locals, funcs)
+                    locals[def_or_guard.name] = val
+                }
+                break
+            }
+            case ExprKind.Guard: {
+                const val = evaluate(def_or_guard.expr, self_, alpha, omega, locals, funcs)
+
+                if (val._data.length == 0) {
+                    return evaluate(def_or_guard.fall, self_, alpha, omega, locals, funcs)
+                }
+
+                if (val.rank == 0 && !val._data[0]) {
+                    return evaluate(def_or_guard.fall, self_, alpha, omega, locals, funcs)
+                }
+
+                break
+            }
+            default:
+                evaluate(def_or_guard, self_, alpha, omega, locals, funcs)
+        }
     }
 
-    let result = evaluate(ast.expr, [null, null], globals, funcs)
+    const last_result = evaluate(stmts[stmts.length-1], self_, alpha, omega, locals, funcs)
 
-    return result
+    return last_result
+}
+
+export const Cast = {
+    number: (n: number) => Functions.makeScalar(n),
+    string: (s: string) => Functions.makeString(s),
 }
 
 export function tokens(expr: string): { kind: string, text: string }[] | null {
@@ -683,6 +763,8 @@ export function tokens(expr: string): { kind: string, text: string }[] | null {
         [TokenType.String]: 'string',
         [TokenType.Error]: 'error',
         [TokenType.Comment]: 'comment',
+        [TokenType.Define]: 'control',
+        [TokenType.Pipe]: 'control',
     }
 
     try {
