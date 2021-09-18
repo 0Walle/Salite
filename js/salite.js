@@ -6,39 +6,41 @@ class MultiArray {
     _shape;
     _strides;
     _data;
-    constructor(shape1, data, strides){
+    constructor(shape, data, strides){
         if (data.length == 0) {
             this._shape = [];
             this._strides = [];
             this._data = [];
             return;
         }
-        this._shape = shape1;
+        this._shape = shape;
         this._data = data;
         if (strides) {
             this._strides = strides;
-        } else if (shape1.length == 0) {
+        } else if (shape.length == 0) {
             this._strides = [];
-        } else if (shape1.length == 1) {
+        } else if (shape.length == 1) {
             this._strides = [
                 1
             ];
         } else {
-            this._strides = shape1.map((_, i)=>shape1.slice(i + 1).reduce((a, b)=>a * b
+            this._strides = shape.map((_, i)=>shape.slice(i + 1).reduce((a, b)=>a * b
                 , 1)
             );
         }
     }
     static from(iter) {
-        let data1 = Array.from(iter);
+        let data = Array.from(iter);
         return new MultiArray([
-            data1.length
-        ], data1);
+            data.length
+        ], data);
     }
     static same_shape(a, b) {
         return _same_shape(a._shape, b._shape);
     }
     static zip(s, t, f) {
+        if (s._data.length == 0) return new MultiArray([], []);
+        if (t._data.length == 0) return new MultiArray([], []);
         let [gt, lt] = s._shape.length > t._shape.length ? [
             s,
             t
@@ -49,18 +51,18 @@ class MultiArray {
         if (lt.rank != 0 && !_same_shape(lt._shape, gt._shape.slice(-lt.rank))) throw "Shape Error";
         const lt_len = lt._data.length;
         const gt_len = gt._data.length;
-        let data1 = Array(gt_len);
+        let data = Array(gt_len);
         const stride = lt.rank == 0 ? 0 : 1 / gt._strides[lt.rank - 1];
         if (s == gt) {
             for(let i = 0; i < gt_len; i++){
-                data1[i] = f(s._data[i], t._data[Math.floor(i * stride)]);
+                data[i] = f(s._data[i], t._data[Math.floor(i * stride)]);
             }
         } else {
             for(let i = 0; i < gt_len; i++){
-                data1[i] = f(s._data[Math.floor(i * stride)], t._data[i]);
+                data[i] = f(s._data[Math.floor(i * stride)], t._data[i]);
             }
         }
-        return new MultiArray(gt._shape, data1, gt._strides);
+        return new MultiArray(gt._shape, data, gt._strides);
     }
     get rank() {
         return this._shape.length;
@@ -186,7 +188,7 @@ class MultiArray {
         return new MultiArray(shape, this._data.slice(0, length));
     }
     firstAxisToArray() {
-        const shape2 = this._shape.slice(1);
+        const shape = this._shape.slice(1);
         const stride = this._strides[0];
         if (stride == undefined) return [
             {
@@ -199,7 +201,7 @@ class MultiArray {
         let i = 0;
         while(i < this._data.length){
             result.push({
-                shape: shape2,
+                shape: shape,
                 start: i,
                 end: i + stride
             });
@@ -209,7 +211,7 @@ class MultiArray {
     }
     get(index) {
         if (index.length != this._shape.length) throw "Length Error";
-        const i = index.map((x, i1)=>(x < 0 ? this._shape[i1] + x : x) * this._strides[i1]
+        const i = index.map((x, i)=>(x < 0 ? this._shape[i] + x : x) * this._strides[i]
         ).reduce((a, b)=>a + b
         );
         if (i >= this._data.length) throw "Index Error";
@@ -229,12 +231,12 @@ class MultiArray {
                 shape: []
             };
         }
-        const shape2 = this._shape.slice(1);
+        const shape = this._shape.slice(1);
         const stride = this._strides[0];
         return {
             start: index * stride,
             end: (index + 1) * stride,
-            shape: shape2
+            shape
         };
     }
     slice(s) {
@@ -244,7 +246,7 @@ class MultiArray {
         if (this.length == undefined) throw "Rank Error";
         if (cells.length == 0) return new MultiArray([], []);
         let new_data = [];
-        let shape2 = this._shape.slice(1);
+        let shape = this._shape.slice(1);
         for(let i = 0; i < cells.length; i++){
             let cell = cells[i];
             if (cell < 0) cell = this.length + cell;
@@ -254,7 +256,7 @@ class MultiArray {
         }
         return new MultiArray([
             cells.length,
-            ...shape2
+            ...shape
         ], new_data);
     }
 }
@@ -352,7 +354,7 @@ const length = (x)=>{
 };
 const rank = (x)=>makeScalar(x._shape.length)
 ;
-const shape2 = (x)=>makeArray(x._shape)
+const shape1 = (x)=>makeArray(x._shape)
 ;
 const count = (x)=>makeScalar(x._data.length)
 ;
@@ -371,7 +373,7 @@ function cmp_scalar_eq(x, y) {
     return +(x == y);
 }
 const cmp_lt = (x, y)=>{
-    return MultiArray.zip(x, y, (x1, y1)=>1 - cmp_scalar_ge(x1, y1)
+    return MultiArray.zip(x, y, (x, y)=>1 - cmp_scalar_ge(x, y)
     );
 };
 const cmp_le = (x, y)=>{
@@ -381,14 +383,14 @@ const cmp_ge = (x, y)=>{
     return MultiArray.zip(x, y, cmp_scalar_ge);
 };
 const cmp_gt = (x, y)=>{
-    return MultiArray.zip(x, y, (x1, y1)=>1 - cmp_scalar_le(x1, y1)
+    return MultiArray.zip(x, y, (x, y)=>1 - cmp_scalar_le(x, y)
     );
 };
 const cmp_eq = (x, y)=>{
     return MultiArray.zip(x, y, cmp_scalar_eq);
 };
 const cmp_ne = (x, y)=>{
-    return MultiArray.zip(x, y, (x1, y1)=>1 - cmp_scalar_eq(x1, y1)
+    return MultiArray.zip(x, y, (x, y)=>1 - cmp_scalar_eq(x, y)
     );
 };
 function match_values(a, b) {
@@ -417,20 +419,20 @@ const deshape = (x)=>x.deshape()
 ;
 const reshape = (x, y)=>{
     if (x.rank > 1) throw "Rank Error";
-    let shape3 = x._data.map(Number);
-    return y.reshape(shape3);
+    let shape = x._data.map(Number);
+    return y.reshape(shape);
 };
 const iota = (x)=>{
     if (x.rank > 1) throw "Rank Error";
-    let shape3 = x._data.map(Number);
-    const length1 = Math.floor(shape3.reduce((a, b)=>a * b
+    let shape = x._data.map(Number);
+    const length = Math.floor(shape.reduce((a, b)=>a * b
     ));
-    if (isNaN(length1)) throw "Length Error";
-    if (length1 < 0) throw "Length Error";
-    if (length1 == 0) return makeEmpty();
-    const data1 = Array(length1).fill(0).map((_, i)=>i
+    if (isNaN(length)) throw "Length Error";
+    if (length < 0) throw "Length Error";
+    if (length == 0) return makeEmpty();
+    const data = Array(length).fill(0).map((_, i)=>i
     );
-    return new MultiArray(shape3, data1).reshape(shape3);
+    return new MultiArray(shape, data).reshape(shape);
 };
 function takeScalar(x) {
     if (x.rank != 0) throw "Rank Error";
@@ -475,17 +477,17 @@ const transpose = (v)=>{
     console.log(v._strides);
     const first = v._shape[0];
     const tail = v._strides[0];
-    const data1 = new Array(v._data.length);
+    const data = new Array(v._data.length);
     let k = 0;
     for(let j = 0; j < tail; j++){
         for(let i = 0; i < first; i++){
-            data1[k++] = v._data[i * tail + j];
+            data[k++] = v._data[i * tail + j];
         }
     }
     return new MultiArray([
         ...v._shape.slice(1),
         first
-    ], data1);
+    ], data);
 };
 const take = (x, y)=>{
     const n = takeScalar(x);
@@ -514,9 +516,9 @@ const first = (x)=>{
     return makeBox(x._data[0]);
 };
 const first_cell = (y)=>{
-    const first1 = y.slice(y.getFirst(0));
-    if (first1.rank == 0) return makeBox(first1._data[0]);
-    return first1;
+    const first = y.slice(y.getFirst(0));
+    if (first.rank == 0) return makeBox(first._data[0]);
+    return first;
 };
 const pick = (x, y)=>{
     if (x.rank == 0) {
@@ -543,15 +545,15 @@ const pick_indexes = (a, w)=>{
     try {
         let n = takeNumbers(a);
         if (n.length != w._shape.length) throw "Length Error";
-        const i = n.map((x, i1)=>(x < 0 ? w._shape[i1] + x : x) * w._strides[i1]
-        ).reduce((a1, b)=>a1 + b
+        const i = n.map((x, i)=>(x < 0 ? w._shape[i] + x : x) * w._strides[i]
+        ).reduce((a, b)=>a + b
         );
         if (i >= w._data.length) throw "Index Error";
         return [
             i
         ];
     } catch  {
-        const result = a.map((i1)=>pick_indexes(makeBox(i1), w)
+        const result = a.map((i)=>pick_indexes(makeBox(i), w)
         )._data.flat();
         return result;
     }
@@ -589,23 +591,23 @@ const indexof = (x, y)=>{
 };
 const indices = (x)=>{
     const n = takeNumbers(x);
-    const data1 = n.flatMap((n1, i)=>Array(n1).fill(i)
+    const data = n.flatMap((n, i)=>Array(n).fill(i)
     );
-    return makeArray(data1);
+    return makeArray(data);
 };
 const replicate = (x, y)=>{
     const indices_list = takeNumbers(x);
     if (y.length !== indices_list.length) throw "Lenght Error";
-    const indices1 = indices_list.flatMap((n, i)=>Array(n).fill(i)
+    const indices = indices_list.flatMap((n, i)=>Array(n).fill(i)
     );
-    return y.select(indices1);
+    return y.select(indices);
 };
 const mark_firsts = (x)=>{
     if (x.rank != 1) throw "Shape Error";
     const uniques = new Set();
-    const data1 = x.map((n)=>uniques.has(n) ? 0 : (uniques.add(n), 1)
+    const data = x.map((n)=>uniques.has(n) ? 0 : (uniques.add(n), 1)
     );
-    return data1;
+    return data;
 };
 const unique = (x)=>{
     if (x.rank != 1) throw "Shape Error";
@@ -613,47 +615,47 @@ const unique = (x)=>{
     const has = (v)=>uniques.some((u)=>cmp_scalar_eq(u, v)
         )
     ;
-    const data1 = x._data.filter((n)=>has(n) ? false : (uniques.push(n), true)
+    const data = x._data.filter((n)=>has(n) ? false : (uniques.push(n), true)
     );
-    return makeArray(data1);
+    return makeArray(data);
 };
 const group = (x, y)=>{
     const groups = takeNumbers(x);
-    let data1 = [];
+    let data = [];
     for(let i = 0; i < groups.length; i++){
         const n = groups[i];
         if (n < 0) continue;
         const slice = i;
-        if (data1[n] == undefined) {
-            data1[n] = [
+        if (data[n] == undefined) {
+            data[n] = [
                 slice
             ];
         } else {
-            data1[n].push(slice);
+            data[n].push(slice);
         }
     }
-    if (data1.length == 0) return makeEmpty();
-    for(let i1 = 0; i1 < data1.length; i1++){
-        if (data1[i1] == undefined) data1[i1] = [];
+    if (data.length == 0) return makeEmpty();
+    for(let i1 = 0; i1 < data.length; i1++){
+        if (data[i1] == undefined) data[i1] = [];
     }
-    const boxes = data1.map((slices)=>y.select(slices)
+    const boxes = data.map((slices)=>y.select(slices)
     );
     return new MultiArray([
-        data1.length
+        data.length
     ], boxes);
 };
 const group_indices = (x)=>{
     const groups = takeNumbers(x);
-    const data1 = [];
+    const data = [];
     groups.forEach((n, i)=>{
         if (n < 0) return;
-        if (data1[n] == undefined) data1[n] = [];
-        data1[n].push(i);
+        if (data[n] == undefined) data[n] = [];
+        data[n].push(i);
     });
-    for(let i = 0; i < data1.length; i++){
-        if (data1[i] == undefined) data1[i] = [];
+    for(let i = 0; i < data.length; i++){
+        if (data[i] == undefined) data[i] = [];
     }
-    return makeArray(data1.map((x1)=>makeArray(x1)
+    return makeArray(data.map((x)=>makeArray(x)
     ));
 };
 const find = (pat, x)=>{
@@ -705,14 +707,14 @@ function unwrapBox(v) {
 }
 const merge = (x)=>{
     if (x.rank == 0) return x;
-    let first1 = makeBox(x._data[0]);
+    let first = makeBox(x._data[0]);
     const result = x._data.map(makeBox).reduce((acc, v)=>{
-        if (!MultiArray.same_shape(first1, v)) throw "Shape Error";
+        if (!MultiArray.same_shape(first, v)) throw "Shape Error";
         return acc.concat(v);
     });
     return result.reshape([
         ...x._shape,
-        ...first1._shape
+        ...first._shape
     ]);
 };
 const windows = (n, x)=>{
@@ -720,12 +722,12 @@ const windows = (n, x)=>{
     const len = takeScalar(n);
     if (len <= 0) throw "Value Error";
     if (len >= x._shape[0]) throw "Value Error";
-    let windows1 = [];
+    let windows = [];
     const span = x._shape[0] - len + 1;
     for(let i = 0; i < span; i++){
         let a = x.getFirst(i);
         let b = x.getFirst(i + len - 1);
-        windows1.push({
+        windows.push({
             start: a.start,
             end: b.end,
             shape: [
@@ -734,15 +736,15 @@ const windows = (n, x)=>{
             ]
         });
     }
-    let data1 = [];
-    for(let i1 = 0; i1 < windows1.length; i1++){
-        const slice = windows1[i1];
-        data1 = data1.concat(x._data.slice(slice.start, slice.end));
+    let data = [];
+    for(let i1 = 0; i1 < windows.length; i1++){
+        const slice = windows[i1];
+        data = data.concat(x._data.slice(slice.start, slice.end));
     }
     return new MultiArray([
-        windows1.length,
-        ...windows1[0].shape
-    ], data1);
+        windows.length,
+        ...windows[0].shape
+    ], data);
 };
 const solo = (x)=>{
     return x.reshape([
@@ -771,34 +773,34 @@ const grade_up = (x)=>{
     const slices = x.firstAxisToArray();
     const sliced = slices.map((s)=>x.slice(s)
     );
-    const indices1 = slices.map((_, i)=>i
+    const indices = slices.map((_, i)=>i
     ).sort((a, b)=>{
         return compare_values(sliced[a], sliced[b]);
     });
-    return makeArray(indices1);
+    return makeArray(indices);
 };
 const grade_down = (x)=>{
     const slices = x.firstAxisToArray();
     const sliced = slices.map((s)=>x.slice(s)
     );
-    const indices1 = slices.map((_, i)=>i
+    const indices = slices.map((_, i)=>i
     ).sort((a, b)=>{
         return compare_values(sliced[a], sliced[b]) * -1;
     });
-    return makeArray(indices1);
+    return makeArray(indices);
 };
 const under_indices = (x)=>{
-    const indices1 = takeNumbers(x);
-    const data1 = [];
-    indices1.forEach((n)=>{
+    const indices = takeNumbers(x);
+    const data = [];
+    indices.forEach((n)=>{
         if (n < 0) return;
-        if (data1[n] == undefined) data1[n] = 0;
-        data1[n] += 1;
+        if (data[n] == undefined) data[n] = 0;
+        data[n] += 1;
     });
-    for(let i = 0; i < data1.length; i++){
-        if (data1[i] == undefined) data1[i] = 0;
+    for(let i = 0; i < data.length; i++){
+        if (data[i] == undefined) data[i] = 0;
     }
-    return makeArray(data1);
+    return makeArray(data);
 };
 function underBoxPrefix(f) {
     return (v)=>unwrapBox(f(makeBox(v)))
@@ -816,105 +818,106 @@ const reduce = (f)=>(w)=>{
     }
 ;
 const each = (f)=>(w)=>{
-        let data1 = [];
+        let data = [];
         for(let index = 0; index < w._data.length; index++){
             const result = underBoxPrefix(f)(w._data[index]);
-            data1.push(result);
+            data.push(result);
         }
-        return new MultiArray(w._shape, data1, w._strides);
+        return new MultiArray(w._shape, data, w._strides);
     }
 ;
 const cellsPrefix = (f)=>(w)=>{
         const cells = w.firstAxisToArray();
-        let data1 = [];
-        let shape3 = null;
+        let data = [];
+        let shape = null;
         for (const slice of cells){
             const cell = f(w.slice(slice));
-            if (shape3 == null) {
-                shape3 = cell._shape;
-            } else if (cell._shape.length != shape3.length || !cell._shape.every((n, i)=>n == shape3[i]
+            if (shape == null) {
+                shape = cell._shape;
+            } else if (cell._shape.length != shape.length || !cell._shape.every((n, i)=>n == shape[i]
             )) {
                 throw "Shape Error";
             }
-            data1 = data1.concat(cell._data);
+            data = data.concat(cell._data);
         }
-        if (w.length == undefined || shape3 == null) return makeEmpty();
+        if (w.length == undefined || shape == null) return makeEmpty();
         return new MultiArray([
             w.length,
-            ...shape3
-        ], data1);
+            ...shape
+        ], data);
     }
 ;
 const cellsInfix = (f)=>(a, w)=>{
         if (a.length != w.length) throw "Length Error";
         const a_arr = a.firstAxisToArray();
         const w_arr = w.firstAxisToArray();
-        let data1 = [];
-        let shape3 = null;
+        let data = [];
+        let shape = null;
         for(let i = 0; i < a_arr.length; i++){
             const x = a.slice(a_arr[i]);
             const y = w.slice(w_arr[i]);
             const result = f(x, y);
-            if (shape3 == null) {
-                shape3 = result._shape;
-            } else if (result._shape.length != shape3.length || !result._shape.every((n, i1)=>n == shape3[i1]
+            if (shape == null) {
+                shape = result._shape;
+            } else if (result._shape.length != shape.length || !result._shape.every((n, i)=>n == shape[i]
             )) {
                 throw "Shape Error";
             }
-            data1 = data1.concat(result._data);
+            data = data.concat(result._data);
         }
-        if (shape3 == null) return makeEmpty();
+        if (shape == null) return makeEmpty();
         return new MultiArray([
             a_arr.length,
-            ...shape3
-        ], data1);
+            ...shape
+        ], data);
     }
 ;
 const table = (f)=>(a, w)=>{
         const a_arr = a.firstAxisToArray();
         const w_arr = w.firstAxisToArray();
-        let data1 = [];
+        let data = [];
         for (const a_slice of a_arr){
             for (const w_slice of w_arr){
                 const x = a.slice(a_slice);
                 const y = w.slice(w_slice);
                 const result = unwrapBox(f(x, y));
-                data1.push(result);
+                data.push(result);
             }
         }
         return new MultiArray([
             a_arr.length,
             w_arr.length
-        ], data1);
+        ], data);
     }
 ;
 var TokenType;
-(function(TokenType1) {
-    TokenType1[TokenType1["Func"] = 0] = "Func";
-    TokenType1[TokenType1["Monad"] = 1] = "Monad";
-    TokenType1[TokenType1["Dyad"] = 2] = "Dyad";
-    TokenType1[TokenType1["RParen"] = 3] = "RParen";
-    TokenType1[TokenType1["LParen"] = 4] = "LParen";
-    TokenType1[TokenType1["RBrack"] = 5] = "RBrack";
-    TokenType1[TokenType1["LBrack"] = 6] = "LBrack";
-    TokenType1[TokenType1["Number"] = 7] = "Number";
-    TokenType1[TokenType1["Id"] = 8] = "Id";
-    TokenType1[TokenType1["String"] = 9] = "String";
-    TokenType1[TokenType1["ListStart"] = 10] = "ListStart";
-    TokenType1[TokenType1["ListEnd"] = 11] = "ListEnd";
-    TokenType1[TokenType1["Sep"] = 12] = "Sep";
-    TokenType1[TokenType1["Empty"] = 13] = "Empty";
-    TokenType1[TokenType1["Error"] = 14] = "Error";
-    TokenType1[TokenType1["Define"] = 15] = "Define";
-    TokenType1[TokenType1["Comment"] = 16] = "Comment";
+(function(TokenType) {
+    TokenType[TokenType["Func"] = 0] = "Func";
+    TokenType[TokenType["Monad"] = 1] = "Monad";
+    TokenType[TokenType["Dyad"] = 2] = "Dyad";
+    TokenType[TokenType["RParen"] = 3] = "RParen";
+    TokenType[TokenType["LParen"] = 4] = "LParen";
+    TokenType[TokenType["RBrack"] = 5] = "RBrack";
+    TokenType[TokenType["LBrack"] = 6] = "LBrack";
+    TokenType[TokenType["Number"] = 7] = "Number";
+    TokenType[TokenType["Id"] = 8] = "Id";
+    TokenType[TokenType["String"] = 9] = "String";
+    TokenType[TokenType["ListStart"] = 10] = "ListStart";
+    TokenType[TokenType["ListEnd"] = 11] = "ListEnd";
+    TokenType[TokenType["Sep"] = 12] = "Sep";
+    TokenType[TokenType["Empty"] = 13] = "Empty";
+    TokenType[TokenType["Error"] = 14] = "Error";
+    TokenType[TokenType["Define"] = 15] = "Define";
+    TokenType[TokenType["Comment"] = 16] = "Comment";
+    TokenType[TokenType["Pipe"] = 17] = "Pipe";
 })(TokenType || (TokenType = {
 }));
 class Token {
     kind;
     value;
     col;
-    constructor(kind, v){
-        this.kind = kind;
+    constructor(kind1, v){
+        this.kind = kind1;
         this.value = v;
     }
     static Number(n) {
@@ -946,6 +949,9 @@ class Token {
     }
     static LBrack() {
         return new Token(TokenType.LBrack);
+    }
+    static Pipe() {
+        return new Token(TokenType.Pipe);
     }
     static ListStart() {
         return new Token(TokenType.ListStart);
@@ -983,7 +989,7 @@ const func_re = /^([+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨λ√⊣⊢!?]|:[+\
 const monad_re = /^([\\/¨`´§]|\.[a-z][a-z_]*)/;
 const dyad_re = /^([•°←↑→@¤]|\.[A-Z][a-z_]*)/;
 function tokenize(text, quiet = false) {
-    let match1;
+    let match;
     let tokens = [];
     let col = 0;
     while(text.length > 0){
@@ -1029,6 +1035,10 @@ function tokenize(text, quiet = false) {
             tokens.push(Token.Sep().span(col, 1));
             col += 1;
             text = text.slice(1);
+        } else if (text[0] == '|') {
+            tokens.push(Token.Pipe().span(col, 1));
+            col += 1;
+            text = text.slice(1);
         } else if (text[0] == 'π') {
             tokens.push(Token.Number(Math.PI).span(col, 1));
             col += 1;
@@ -1053,33 +1063,33 @@ function tokenize(text, quiet = false) {
             tokens.push(Token.Define().span(col, 2));
             col += 2;
             text = text.slice(2);
-        } else if (match1 = text.match(value_re)) {
-            let name = match1[1];
-            tokens.push(Token.Id(name).span(col, match1[0].length));
-            col += match1[0].length;
-            text = text.slice(match1[0].length);
-        } else if (match1 = text.match(num_re)) {
-            let num = parseFloat(match1[2]);
-            if (match1[1] == '¬') num = -num;
-            tokens.push(Token.Number(num).span(col, match1[0].length));
-            col += match1[0].length;
-            text = text.slice(match1[0].length);
-        } else if (match1 = text.match(string_re)) {
-            tokens.push(Token.String(match1[1]).span(col, match1[0].length));
-            col += match1[0].length;
-            text = text.slice(match1[0].length);
-        } else if (match1 = text.match(func_re)) {
-            tokens.push(Token.Func(match1[0]).span(col, match1[0].length));
-            col += match1[0].length;
-            text = text.slice(match1[0].length);
-        } else if (match1 = text.match(monad_re)) {
-            tokens.push(Token.Monad(match1[0]).span(col, match1[0].length));
-            col += match1[0].length;
-            text = text.slice(match1[0].length);
-        } else if (match1 = text.match(dyad_re)) {
-            tokens.push(Token.Dyad(match1[0]).span(col, match1[0].length));
-            col += match1[0].length;
-            text = text.slice(match1[0].length);
+        } else if (match = text.match(value_re)) {
+            let name = match[1];
+            tokens.push(Token.Id(name).span(col, match[0].length));
+            col += match[0].length;
+            text = text.slice(match[0].length);
+        } else if (match = text.match(num_re)) {
+            let num = parseFloat(match[2]);
+            if (match[1] == '¬') num = -num;
+            tokens.push(Token.Number(num).span(col, match[0].length));
+            col += match[0].length;
+            text = text.slice(match[0].length);
+        } else if (match = text.match(string_re)) {
+            tokens.push(Token.String(match[1]).span(col, match[0].length));
+            col += match[0].length;
+            text = text.slice(match[0].length);
+        } else if (match = text.match(func_re)) {
+            tokens.push(Token.Func(match[0]).span(col, match[0].length));
+            col += match[0].length;
+            text = text.slice(match[0].length);
+        } else if (match = text.match(monad_re)) {
+            tokens.push(Token.Monad(match[0]).span(col, match[0].length));
+            col += match[0].length;
+            text = text.slice(match[0].length);
+        } else if (match = text.match(dyad_re)) {
+            tokens.push(Token.Dyad(match[0]).span(col, match[0].length));
+            col += match[0].length;
+            text = text.slice(match[0].length);
         } else {
             if (quiet) {
                 tokens.push(Token.Error().span(col, 1));
@@ -1093,19 +1103,21 @@ function tokenize(text, quiet = false) {
     return tokens;
 }
 var ExprKind;
-(function(ExprKind1) {
-    ExprKind1[ExprKind1["Number"] = 0] = "Number";
-    ExprKind1[ExprKind1["Id"] = 1] = "Id";
-    ExprKind1[ExprKind1["String"] = 2] = "String";
-    ExprKind1[ExprKind1["Prefix"] = 3] = "Prefix";
-    ExprKind1[ExprKind1["Infix"] = 4] = "Infix";
-    ExprKind1[ExprKind1["Func"] = 5] = "Func";
-    ExprKind1[ExprKind1["Monad"] = 6] = "Monad";
-    ExprKind1[ExprKind1["Dyad"] = 7] = "Dyad";
-    ExprKind1[ExprKind1["Fork"] = 8] = "Fork";
-    ExprKind1[ExprKind1["Train"] = 9] = "Train";
-    ExprKind1[ExprKind1["Vector"] = 10] = "Vector";
-    ExprKind1[ExprKind1["Defn"] = 11] = "Defn";
+(function(ExprKind) {
+    ExprKind[ExprKind["Number"] = 0] = "Number";
+    ExprKind[ExprKind["Id"] = 1] = "Id";
+    ExprKind[ExprKind["String"] = 2] = "String";
+    ExprKind[ExprKind["Prefix"] = 3] = "Prefix";
+    ExprKind[ExprKind["Infix"] = 4] = "Infix";
+    ExprKind[ExprKind["Func"] = 5] = "Func";
+    ExprKind[ExprKind["Monad"] = 6] = "Monad";
+    ExprKind[ExprKind["Dyad"] = 7] = "Dyad";
+    ExprKind[ExprKind["Fork"] = 8] = "Fork";
+    ExprKind[ExprKind["Train"] = 9] = "Train";
+    ExprKind[ExprKind["Vector"] = 10] = "Vector";
+    ExprKind[ExprKind["Defn"] = 11] = "Defn";
+    ExprKind[ExprKind["Decl"] = 12] = "Decl";
+    ExprKind[ExprKind["Guard"] = 13] = "Guard";
 })(ExprKind || (ExprKind = {
 }));
 function Expr_Number(n) {
@@ -1160,7 +1172,11 @@ function pretty_expr(e) {
         case ExprKind.Dyad:
             return `${pretty_expr(e.alpha)}${e.mod}(${pretty_expr(e.omega)})`;
         case ExprKind.Defn:
-            return `{${pretty_expr(e.fn)}}`;
+            return `{${e.fn.map(pretty_expr).join(', ')}}`;
+        case ExprKind.Decl:
+            return `${e.name} :: ${pretty_expr(e.value)}`;
+        case ExprKind.Guard:
+            return `${pretty_expr(e.expr)} | ${pretty_expr(e.fall)}`;
     }
 }
 function is_func(e) {
@@ -1171,6 +1187,44 @@ function is_func(e) {
     if (e.kind == ExprKind.Train) return true;
     if (e.kind == ExprKind.Defn) return true;
     return false;
+}
+function parse_try_def_or_guard(ctx) {
+    if (ctx.code.length == 0) return null;
+    let [tk, ...tail] = ctx.code;
+    switch(tk.kind){
+        case TokenType.Id:
+        case TokenType.Func:
+            {
+                const [is_def, ...tail_] = tail;
+                if (is_def.kind != TokenType.Define) break;
+                ctx.code = tail_;
+                const expr = parse_expr(ctx);
+                if (expr == null) throw "Invalid code, expected expression";
+                if (tk.kind == TokenType.Func != is_func(expr)) {
+                    throw `Invalid code, expected ${tk.kind == TokenType.Func ? 'function' : 'value'}`;
+                }
+                return {
+                    kind: ExprKind.Decl,
+                    is_func: tk.kind == TokenType.Func,
+                    name: tk.value,
+                    value: expr
+                };
+            }
+    }
+    let expr = parse_expr(ctx);
+    if (expr == null) return null;
+    [tk, ...tail] = ctx.code;
+    if (tk?.kind == TokenType.Pipe) {
+        ctx.code = tail;
+        const fall = parse_expr(ctx);
+        if (fall == null) throw "Invalid code, expected expression";
+        expr = {
+            kind: ExprKind.Guard,
+            expr: expr,
+            fall: fall
+        };
+    }
+    return expr;
 }
 function parse_try_func_or_subj(ctx) {
     if (ctx.code.length == 0) return null;
@@ -1238,16 +1292,22 @@ function parse_try_func_or_subj(ctx) {
         case TokenType.LBrack:
             {
                 ctx.code = tail;
-                let expr = parse_expr(ctx);
-                if (ctx.code[0].kind != TokenType.RBrack) throw "Invalid code, expected }";
-                ctx.code = ctx.code.slice(1);
-                if (expr === null) throw "Invalid code in defn";
-                if (is_func(expr)) {
-                    throw "Invalid code in defn";
+                let exprs = [];
+                while(true){
+                    let expr = parse_try_def_or_guard(ctx);
+                    if (expr === null) throw "Invalid code in defn";
+                    if (is_func(expr)) {
+                        throw "Invalid code in defn";
+                    }
+                    exprs.push(expr);
+                    if (ctx.code[0].kind == TokenType.RBrack) break;
+                    if (ctx.code[0].kind != TokenType.Sep) throw "Invalid Code, expected separator";
+                    ctx.code = ctx.code.slice(1);
                 }
+                ctx.code = ctx.code.slice(1);
                 return {
                     kind: ExprKind.Defn,
-                    fn: expr
+                    fn: exprs
                 };
             }
         default:
@@ -1316,8 +1376,8 @@ function parse_try_subj(ctx) {
             return null;
     }
 }
-function parse_derv(ctx, first1) {
-    let result = first1 ?? parse_try_func_or_subj(ctx);
+function parse_derv(ctx, first) {
+    let result = first ?? parse_try_func_or_subj(ctx);
     loop: while(true){
         let top = ctx.code[0];
         switch(top?.kind){
@@ -1352,14 +1412,14 @@ function parse_derv(ctx, first1) {
     if (result === null) {
         return null;
     }
-    if (!is_func(result)) throw `Invalid code, expected function`;
+    if (!is_func(result)) throw `Invalid code, expected function found ${result.kind}`;
     return result;
 }
 function parse_expr(ctx) {
     if (ctx.code.length == 0) {
         return null;
     }
-    if (ctx.code[0].kind == TokenType.RParen || ctx.code[0].kind == TokenType.Sep || ctx.code[0].kind == TokenType.ListEnd) {
+    if (ctx.code[0].kind == TokenType.RParen || ctx.code[0].kind == TokenType.Sep || ctx.code[0].kind == TokenType.Pipe || ctx.code[0].kind == TokenType.ListEnd) {
         return null;
     }
     let alpha = parse_try_subj(ctx);
@@ -1417,70 +1477,52 @@ function parse_expr(ctx) {
 }
 function parse(text) {
     let tk = tokenize(text);
-    let defs = {
-    };
-    let funcs = {
-    };
     let ctx = {
         code: tk
     };
-    while(ctx.code.length > 2 && ctx.code[1].kind == TokenType.Define){
-        let name = ctx.code[0];
-        ctx.code = ctx.code.slice(2);
-        let r = parse_expr(ctx);
-        if (r == null) throw "Error in definition";
-        if (name.kind == TokenType.Id && !is_func(r)) {
-            defs[name.value] = r;
-        } else if (name.kind == TokenType.Func && is_func(r)) {
-            funcs[name.value] = r;
-        } else {
-            throw "Error in definition";
-        }
-        if (!(ctx.code.length > 0 && ctx.code[0].kind == TokenType.Sep)) throw "Invalid code";
-        ctx.code = ctx.code.slice(1);
+    let exprs = [];
+    while(true){
+        const expr = parse_try_def_or_guard(ctx);
+        if (expr == null) throw "Invalid code";
+        exprs.push(expr);
+        if (ctx.code.length == 0) break;
+        if (ctx.code[0].kind != TokenType.Sep) throw "Invalid code, expected separator";
+        ctx.code.shift();
     }
-    let r = parse_expr(ctx);
-    if (r === null) {
-        throw "Parse Error";
-    }
-    return {
-        expr: r,
-        vars: defs,
-        funcs: funcs
-    };
+    return exprs;
 }
 class SaliteError extends Error {
     span;
-    constructor(message, col){
+    constructor(message, col1){
         super(message);
         this.name = "Evaluation Error";
-        this.span = col;
+        this.span = col1;
     }
 }
 class SaliteArityError extends SaliteError {
     at;
     expected;
-    constructor(expected, at, col1){
-        let _a = expected == 1 ? 'prefix' : 'infix';
+    constructor(expected1, at1, col2){
+        let _a = expected1 == 1 ? 'prefix' : 'infix';
         let message1 = `Arity Error: Function is not ${_a}`;
-        if (at) {
-            message1 = `Arity Error: Function at ${at} is not ${_a}`;
+        if (at1) {
+            message1 = `Arity Error: Function at ${at1} is not ${_a}`;
         }
-        super(message1, col1);
+        super(message1, col2);
         this.name = "Arity Error";
-        this.at = at;
-        this.expected = expected;
+        this.at = at1;
+        this.expected = expected1;
     }
 }
-function pretty_value_(v1) {
-    if (v1 == undefined) return [
+function pretty_value_(v) {
+    if (v == undefined) return [
         'ERR'
     ];
-    if (v1._data.length == 0) return [
+    if (v._data.length == 0) return [
         'ø'
     ];
-    if (v1.rank == 0) {
-        let single = v1._data[0];
+    if (v.rank == 0) {
+        let single = v._data[0];
         switch(typeof single){
             case 'number':
                 {
@@ -1514,26 +1556,26 @@ function pretty_value_(v1) {
                 }
         }
     }
-    if (v1._data.every((v2)=>typeof v2 == 'string'
+    if (v._data.every((v)=>typeof v == 'string'
     )) {
-        if (v1.rank == 1) return [
-            `'${v1._data.join('')}'`
+        if (v.rank == 1) return [
+            `'${v._data.join('')}'`
         ];
         let i = 0;
-        let last = v1._strides[v1._strides.length - 2];
+        let last = v._strides[v._strides.length - 2];
         let strings = [];
-        while(i < v1._data.length){
-            if (i != 0 && v1._strides.slice(0, -2).some((n)=>i % n == 0
+        while(i < v._data.length){
+            if (i != 0 && v._strides.slice(0, -2).some((n)=>i % n == 0
             )) strings.push("");
-            strings.push(v1._data.slice(i, i + last).join(''));
+            strings.push(v._data.slice(i, i + last).join(''));
             i += last;
         }
-        return strings.map((s, i1)=>(i1 > 0 ? ' ' : '"') + s + (i1 == strings.length - 1 ? '"' : ' ')
+        return strings.map((s, i)=>(i > 0 ? ' ' : '"') + s + (i == strings.length - 1 ? '"' : ' ')
         );
     }
-    let strings = v1._data.map((v2)=>pretty_value_(makeBox(v2))
+    let strings = v._data.map((v)=>pretty_value_(makeBox(v))
     );
-    if (v1.rank == 1) {
+    if (v.rank == 1) {
         let sizes = strings.map((ss)=>[
                 ss[0].length,
                 ss.length
@@ -1562,25 +1604,25 @@ function pretty_value_(v1) {
     }
     let max_hei = Math.max(...strings.map((ss)=>ss.length
     ));
-    if (v1.rank == 2 && max_hei == 1) {
+    if (v.rank == 2 && max_hei == 1) {
         let i = 0;
-        let last = v1._strides[v1._strides.length - 2];
-        let strings1 = [];
+        let last = v._strides[v._strides.length - 2];
+        let strings = [];
         let col_max = Array(last).fill(0);
-        while(i < v1._data.length){
-            if (i != 0 && v1._strides.slice(0, -2).some((n)=>i % n == 0
-            )) strings1.push([
+        while(i < v._data.length){
+            if (i != 0 && v._strides.slice(0, -2).some((n)=>i % n == 0
+            )) strings.push([
                 ""
             ]);
-            const row_string = v1._data.slice(i, i + last).map((n)=>pretty_value_(makeBox(n))[0]
+            const row_string = v._data.slice(i, i + last).map((n)=>pretty_value_(makeBox(n))[0]
             );
-            row_string.forEach((s, i1)=>{
-                if (s.length > col_max[i1]) col_max[i1] = s.length;
+            row_string.forEach((s, i)=>{
+                if (s.length > col_max[i]) col_max[i] = s.length;
             });
-            strings1.push(row_string);
+            strings.push(row_string);
             i += last;
         }
-        const padded = strings1.map((s)=>s.map((s1, i1)=>s1.padStart(col_max[i1])
+        const padded = strings.map((s)=>s.map((s, i)=>s.padStart(col_max[i])
             ).join(' ')
         );
         return [
@@ -1594,11 +1636,11 @@ function pretty_value_(v1) {
     let len = Math.max(...strings.map((ss)=>ss[0].length
     ));
     return [
-        `┌~${v1._shape.join(' ')}`.padEnd(len + 4),
+        `┌~${v._shape.join(' ')}`.padEnd(len + 4),
         `╵ ${strings[0][0]}  `,
         ...strings[0].slice(1).map((s)=>'  ' + s + '  '
         ),
-        ...strings.slice(1).flatMap((s)=>s.map((s1)=>'  ' + s1 + '  '
+        ...strings.slice(1).flatMap((s)=>s.map((s)=>'  ' + s + '  '
             ).join('\n')
         ),
         `${' '.repeat(len + 3)}┘`
@@ -1702,7 +1744,7 @@ const builtin_functions = {
         indexof
     ],
     'ρ': [
-        shape2,
+        shape1,
         reshape
     ],
     'φ': [
@@ -1879,7 +1921,7 @@ const builtin_functions_undo = {
         null
     ],
     ';': [
-        (before)=>(x)=>reshape(shape2(before), x)
+        (before)=>(x)=>reshape(shape1(before), x)
         ,
         null
     ],
@@ -1891,7 +1933,7 @@ const builtin_functions_undo = {
     'ρ': [
         (before)=>(x)=>reshape(x, before)
         ,
-        (f)=>(_, w)=>reshape(shape2(w), f(w))
+        (f)=>(_, w)=>reshape(shape1(w), f(w))
     ],
     '¢': [
         (before)=>(x)=>{
@@ -1929,7 +1971,7 @@ const builtin_functions_undo = {
         (f)=>(a, w)=>{
                 const j = w._data;
                 if (w.rank == 0) throw "Rank Error";
-                const select1 = (slice)=>{
+                const select = (slice)=>{
                     const value = f(w.slice(slice));
                     if (slice.shape.length != value.rank && !slice.shape.every((n, i)=>n == value._shape[i]
                     )) throw "Shape Error";
@@ -1940,11 +1982,11 @@ const builtin_functions_undo = {
                 if (a.rank == 0) {
                     let n = takeScalar(a);
                     const slice = w.getFirst(n ?? 0);
-                    select1(slice);
+                    select(slice);
                     return new MultiArray(w._shape, j, w._strides);
                 }
                 let n = takeNumbers(a.deshape());
-                n.forEach((i)=>select1(w.getFirst(i))
+                n.forEach((i)=>select(w.getFirst(i))
                 );
                 return new MultiArray(w._shape, j, w._strides);
             }
@@ -1953,24 +1995,24 @@ const builtin_functions_undo = {
         ()=>under_indices
         ,
         (f)=>(a, w)=>{
-                const indices1 = takeNumbers(a);
-                if (indices1.length != w.length) throw "Length Error";
+                const indices = takeNumbers(a);
+                if (indices.length != w.length) throw "Length Error";
                 const cells = w.firstAxisToArray().map((s)=>w.slice(s)
                 );
-                let data1 = [];
-                for(let i = 0; i < indices1.length; i++){
-                    const n = indices1[i];
+                let data = [];
+                for(let i = 0; i < indices.length; i++){
+                    const n = indices[i];
                     if (n == 0) {
-                        data1 = data1.concat(cells[i]._data);
+                        data = data.concat(cells[i]._data);
                     } else {
                         const result = f(makeBox(cells[i]));
                         if (result.rank != w.rank - 1) throw "Rank Error";
-                        if (!result._shape.every((n1, i1)=>n1 == w._shape[i1 + 1]
+                        if (!result._shape.every((n, i)=>n == w._shape[i + 1]
                         )) throw "Shape Error";
-                        data1 = data1.concat(result._data);
+                        data = data.concat(result._data);
                     }
                 }
-                return new MultiArray(w._shape, data1, w._strides);
+                return new MultiArray(w._shape, data, w._strides);
             }
     ],
     ':<': [
@@ -2062,9 +2104,9 @@ const builtin_monads = {
             },
             (a, w)=>{
                 if (alpha2 == null) throw "Function at ` is not infix";
-                if (a.rank == 0) return cellsPrefix((w1)=>alpha2(a, w1)
+                if (a.rank == 0) return cellsPrefix((w)=>alpha2(a, w)
                 )(w);
-                if (w.rank == 0) return cellsPrefix((a1)=>alpha2(a1, w)
+                if (w.rank == 0) return cellsPrefix((a)=>alpha2(a, w)
                 )(a);
                 return cellsInfix(alpha2)(a, w);
             }
@@ -2152,22 +2194,22 @@ const builtin_dyads = {
         ];
     }
 };
-function pretty_value1(v1) {
-    return pretty_value_(v1).join('\n');
+function pretty_value1(v) {
+    return pretty_value_(v).join('\n');
 }
-function evaluate_func(e, self, globals, funcs) {
+function evaluate_func(e, self, context_alpha, context_omega, globals, funcs) {
     switch(e.kind){
         case ExprKind.Func:
             {
                 if (e.name == 'λ') return self;
-                let v1 = builtin_functions[e.name];
-                if (v1 === undefined) v1 = funcs[e.name];
-                if (v1 === undefined) throw new SaliteError(`Name Error: Undefined name ${e.name}`);
-                return v1;
+                let v = builtin_functions[e.name];
+                if (v === undefined) v = funcs[e.name];
+                if (v === undefined) throw new SaliteError(`Name Error: Undefined name ${e.name}`);
+                return v;
             }
         case ExprKind.Monad:
             {
-                const alpha = evaluate_func(e.alpha, self, globals, funcs);
+                const alpha = evaluate_func(e.alpha, self, context_alpha, context_omega, globals, funcs);
                 const monad = builtin_monads[e.mod];
                 if (!monad) throw new SaliteError(`Name Error: Undefined name ${e.mod}`);
                 return monad(alpha);
@@ -2181,7 +2223,7 @@ function evaluate_func(e, self, globals, funcs) {
                     const [do1, do2] = do_f;
                     if (undo) {
                         const [undo1, undo2] = undo;
-                        const [alpha1, alpha2] = evaluate_func(e.alpha, self, globals, funcs);
+                        const [alpha1, alpha2] = evaluate_func(e.alpha, self, context_alpha, context_omega, globals, funcs);
                         if (alpha1 == null) throw "Left function at ¤ is not prefix";
                         return [
                             (w)=>{
@@ -2197,17 +2239,17 @@ function evaluate_func(e, self, globals, funcs) {
                         ];
                     }
                 }
-                const alpha = evaluate_func(e.alpha, self, globals, funcs);
-                const omega = evaluate_func(e.omega, self, globals, funcs);
+                const alpha = evaluate_func(e.alpha, self, context_alpha, context_omega, globals, funcs);
+                const omega = evaluate_func(e.omega, self, context_alpha, context_omega, globals, funcs);
                 const dyad = builtin_dyads[e.mod];
                 if (!dyad) throw new SaliteError(`Name Error: Undefined name ${e.mod}`);
                 return dyad(alpha, omega);
             }
         case ExprKind.Fork:
             {
-                const [alpha1, alpha2] = evaluate_func(e.alpha, self, globals, funcs);
-                const [omega1, omega2] = evaluate_func(e.omega, self, globals, funcs);
-                const [_3, infix] = evaluate_func(e.infix, self, globals, funcs);
+                const [alpha1, alpha2] = evaluate_func(e.alpha, self, context_alpha, context_omega, globals, funcs);
+                const [omega1, omega2] = evaluate_func(e.omega, self, context_alpha, context_omega, globals, funcs);
+                const [_3, infix] = evaluate_func(e.infix, self, context_alpha, context_omega, globals, funcs);
                 if (infix == null) {
                     throw new SaliteArityError(2, 'middle of fork');
                 }
@@ -2226,8 +2268,8 @@ function evaluate_func(e, self, globals, funcs) {
             }
         case ExprKind.Train:
             {
-                const [alpha1, _] = evaluate_func(e.alpha, self, globals, funcs);
-                const [omega1, omega2] = evaluate_func(e.omega, self, globals, funcs);
+                const [alpha1, _] = evaluate_func(e.alpha, self, context_alpha, context_omega, globals, funcs);
+                const [omega1, omega2] = evaluate_func(e.omega, self, context_alpha, context_omega, globals, funcs);
                 if (alpha1 == null) throw new SaliteArityError(1, 'left of atop');
                 return [
                     (w)=>{
@@ -2242,24 +2284,55 @@ function evaluate_func(e, self, globals, funcs) {
             }
         case ExprKind.Defn:
             {
+                const last = e.fn[e.fn.length - 1];
+                const make_the_things = (a, w)=>{
+                    const locals = {
+                        ...globals
+                    };
+                    const locals_funcs = {
+                        ...funcs
+                    };
+                    for(let i = 0; i < e.fn.length - 1; i++){
+                        const def_or_guard = e.fn[i];
+                        switch(def_or_guard.kind){
+                            case ExprKind.Decl:
+                                {
+                                    if (def_or_guard.is_func) {
+                                        const val = evaluate_func(def_or_guard.value, rec, a, w, locals, locals_funcs);
+                                        locals_funcs[def_or_guard.name] = val;
+                                    } else {
+                                        const val = evaluate(def_or_guard.value, rec, a, w, locals, locals_funcs);
+                                        locals[def_or_guard.name] = val;
+                                    }
+                                    break;
+                                }
+                            case ExprKind.Guard:
+                                {
+                                    const val = evaluate(def_or_guard.expr, rec, a, w, locals, locals_funcs);
+                                    if (val._data.length == 0) {
+                                        return evaluate(def_or_guard.fall, rec, a, w, locals, locals_funcs);
+                                    }
+                                    if (val.rank == 0 && !val._data[0]) {
+                                        return evaluate(def_or_guard.fall, rec, a, w, locals, locals_funcs);
+                                    }
+                                    break;
+                                }
+                            default:
+                                evaluate(def_or_guard, rec, a, w, locals, locals_funcs);
+                        }
+                    }
+                    return evaluate(last, rec, a, w, locals, locals_funcs);
+                };
                 const rec = [
-                    (w)=>evaluate(e.fn, rec, {
-                            'α': makeEmpty(),
-                            'ω': w,
-                            ...globals
-                        }, funcs)
+                    (w)=>make_the_things(makeEmpty(), w)
                     ,
-                    (a, w)=>evaluate(e.fn, rec, {
-                            'α': a,
-                            'ω': w,
-                            ...globals
-                        }, funcs)
+                    (a, w)=>make_the_things(a, w)
                 ];
                 return rec;
             }
         default:
             {
-                const val = evaluate(e, self, globals, funcs);
+                const val = evaluate(e, self, context_alpha, context_omega, globals, funcs);
                 return [
                     ()=>val
                     ,
@@ -2268,7 +2341,7 @@ function evaluate_func(e, self, globals, funcs) {
             }
     }
 }
-function evaluate(e, self, globals, funcs) {
+function evaluate(e, self, context_alpha, context_omega, globals, funcs) {
     switch(e.kind){
         case ExprKind.Number:
             return makeScalar(e.value);
@@ -2279,33 +2352,35 @@ function evaluate(e, self, globals, funcs) {
             return makeString(e.value);
         case ExprKind.Id:
             {
-                let v1 = globals[e.value];
-                if (v1 === undefined) throw new SaliteError(`Name Error: Undefined name ${e.value}`);
-                return v1;
+                if (e.value == 'α') return context_alpha;
+                if (e.value == 'ω') return context_omega;
+                let v = globals[e.value];
+                if (v === undefined) throw new SaliteError(`Name Error: Undefined name ${e.value}`);
+                return v;
             }
         case ExprKind.Vector:
             {
                 if (e.value.length == 0) {
                     return makeEmpty();
                 }
-                let vals = e.value.map((e1)=>unwrapBox(evaluate(e1, self, globals, funcs))
+                let vals = e.value.map((e)=>unwrapBox(evaluate(e, self, context_alpha, context_omega, globals, funcs))
                 );
                 return makeArray(vals);
             }
         case ExprKind.Prefix:
             {
-                let func = evaluate_func(e.func, self, globals, funcs)[0];
+                let func = evaluate_func(e.func, self, context_alpha, context_omega, globals, funcs)[0];
                 if (func === null) throw new SaliteArityError(1);
-                let omega = evaluate(e.omega, self, globals, funcs);
+                let omega = evaluate(e.omega, self, context_alpha, context_omega, globals, funcs);
                 let result = func(omega);
                 return result;
             }
         case ExprKind.Infix:
             {
-                let func = evaluate_func(e.func, self, globals, funcs)[1];
+                let func = evaluate_func(e.func, self, context_alpha, context_omega, globals, funcs)[1];
                 if (func === null) throw new SaliteArityError(2);
-                let alpha = evaluate(e.alpha, self, globals, funcs);
-                let omega = evaluate(e.omega, self, globals, funcs);
+                let alpha = evaluate(e.alpha, self, context_alpha, context_omega, globals, funcs);
+                let omega = evaluate(e.omega, self, context_alpha, context_omega, globals, funcs);
                 let result = func(alpha, omega);
                 return result;
             }
@@ -2314,33 +2389,64 @@ function evaluate(e, self, globals, funcs) {
             throw `Value Error: Not a value - ${pretty_expr(e)}`;
     }
 }
-function run1(expr, globals) {
-    let ast = parse(expr);
+function run1(expr, globals, foreign) {
+    let stmts = parse(expr);
     let funcs = {
     };
-    for(const name in ast.funcs){
-        const fast = ast.funcs[name];
-        const desc = evaluate_func(fast, [
-            null,
-            null
-        ], globals, funcs);
-        funcs[name] = desc;
+    for(const f in foreign){
+        funcs[f] = [
+            foreign[f],
+            foreign[f]
+        ];
     }
-    for(const name1 in ast.vars){
-        const val = evaluate(ast.vars[name1], [
-            null,
-            null
-        ], globals, funcs);
-        globals[name1] = val;
-    }
-    let result = evaluate(ast.expr, [
+    let locals = {
+        ...globals
+    };
+    let self_ = [
         null,
         null
-    ], globals, funcs);
-    return result;
+    ];
+    let alpha = makeEmpty();
+    let omega = makeEmpty();
+    for(let i = 0; i < stmts.length - 1; i++){
+        const def_or_guard = stmts[i];
+        switch(def_or_guard.kind){
+            case ExprKind.Decl:
+                {
+                    if (def_or_guard.is_func) {
+                        const val = evaluate_func(def_or_guard.value, self_, alpha, omega, locals, funcs);
+                        funcs[def_or_guard.name] = val;
+                    } else {
+                        const val = evaluate(def_or_guard.value, self_, alpha, omega, locals, funcs);
+                        locals[def_or_guard.name] = val;
+                    }
+                    break;
+                }
+            case ExprKind.Guard:
+                {
+                    const val = evaluate(def_or_guard.expr, self_, alpha, omega, locals, funcs);
+                    if (val._data.length == 0) {
+                        return evaluate(def_or_guard.fall, self_, alpha, omega, locals, funcs);
+                    }
+                    if (val.rank == 0 && !val._data[0]) {
+                        return evaluate(def_or_guard.fall, self_, alpha, omega, locals, funcs);
+                    }
+                    break;
+                }
+            default:
+                evaluate(def_or_guard, self_, alpha, omega, locals, funcs);
+        }
+    }
+    const last_result = evaluate(stmts[stmts.length - 1], self_, alpha, omega, locals, funcs);
+    return last_result;
 }
+const Cast1 = {
+    number: (n)=>makeScalar(n)
+    ,
+    string: (s)=>makeString(s)
+};
 function tokens1(expr) {
-    const table1 = {
+    const table = {
         [TokenType.Func]: 'func',
         [TokenType.Monad]: 'monad',
         [TokenType.Dyad]: 'dyad',
@@ -2348,29 +2454,31 @@ function tokens1(expr) {
         [TokenType.Empty]: 'const',
         [TokenType.String]: 'string',
         [TokenType.Error]: 'error',
-        [TokenType.Comment]: 'comment'
+        [TokenType.Comment]: 'comment',
+        [TokenType.Define]: 'control',
+        [TokenType.Pipe]: 'control'
     };
     try {
         const tks = tokenize(expr, true);
         let code = [];
-        let col2 = 0;
+        let col = 0;
         for (const tk of tks){
             if (tk.col === undefined) continue;
             const start = tk.col[0];
             const end = tk.col[1];
-            const start_text = expr.slice(col2, start);
+            const start_text = expr.slice(col, start);
             if (start_text.length > 0) {
                 code.push({
                     kind: 'none',
-                    text: expr.slice(col2, start)
+                    text: expr.slice(col, start)
                 });
             }
-            const end_kind = table1[tk.kind] ?? 'none';
+            const end_kind = table[tk.kind] ?? 'none';
             code.push({
                 kind: end_kind,
                 text: expr.slice(start, end)
             });
-            col2 = end;
+            col = end;
         }
         return code;
     } catch  {
@@ -2597,6 +2705,7 @@ const symbol_names1 = {
 };
 export { pretty_value1 as pretty_value };
 export { run1 as run };
+export { Cast1 as Cast,  };
 export { tokens1 as tokens };
 export { symbol_overstrike1 as symbol_overstrike,  };
 export { symbol_names1 as symbol_names };
