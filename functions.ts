@@ -27,6 +27,21 @@ export function makeString(str: string): Value {
     return new MultiArray([a.length], a)
 }
 
+function rank_operator<T>(array: MultiArray<T>, rank: number): MultiArray<T>[] {
+    if (rank == 0) throw "Rank Error"
+    rank = rank > array._shape.length ? array._shape.length : rank
+    const new_shape = array._shape.slice(- rank)
+    const stride = array._shape.slice(array._shape.length - rank).reduce((a, b) => a * b)
+    const length = array._data.length
+    const indexes = []
+
+    for (let i = 0; i < length; i += stride) {
+        indexes.push(new MultiArray(new_shape, new Array(stride).fill(0).map((_, j) => array._data[i + j])))
+    }
+
+    return indexes
+}
+
 function makeArithPrefix(num: (x: number) => number): Prefix {
     const rec: Prefix = (x) => {
         return x.map(w => {
@@ -694,4 +709,40 @@ export const table: (f: Infix) => Infix = (f) => (a, w) => {
     }
     
     return new MultiArray([a_arr.length, w_arr.length], data)
+}
+
+export const rank_prefix: (f: Prefix, g: Prefix) => Prefix = (f, g) => (w) => {
+    const rank = takeScalar(g(w))
+
+    const ranked = rank_operator(w, rank).map(x => f(x))
+
+    console.log(ranked)
+
+    let first = ranked[0]
+
+    const result = ranked.reduce((acc, v) => {
+        if (!MultiArray.same_shape(first, v)) throw "Shape Error"
+
+        return acc.concat(v)
+    })
+
+    return result.reshape(w._shape)
+}
+
+export const rank_infix: (f: Infix, g: Infix) => Infix = (f, g) => (a, w) => {
+    const rank = takeScalar(g(a, w))
+
+    const ranked = rank_operator(w, rank).map(x => f(a, x))
+
+    console.log(ranked)
+
+    let first = ranked[0]
+
+    const result = ranked.reduce((acc, v) => {
+        if (!MultiArray.same_shape(first, v)) throw "Shape Error"
+
+        return acc.concat(v)
+    })
+
+    return result.reshape(w._shape)
 }

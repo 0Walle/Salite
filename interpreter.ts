@@ -373,7 +373,7 @@ const builtin_monads: MonadMap = {
         return [ (w) => {
             const slices = w.firstAxisToArray()
 
-            const new_cells: (string | number | Value)[] = [w.slice(slices[0])]
+            const new_cells: (string | number | Value)[] = [Functions.unwrapBox(w.slice(slices[0]))]
 
             slices.slice(1).forEach((slice, i: number) => {
                 const a_ = Functions.makeBox(new_cells[i])
@@ -475,6 +475,26 @@ const builtin_dyads: DyadMap = {
                 for (let i = 0; i < n; ++i) { result = alpha2(a, result) }
                 return result
             },
+        ]
+    },
+    '↓': ([alpha1, alpha2], [omega1, omega2]) => {
+        return [
+            (w) => {
+                if (alpha1 == null) throw "Left function at ↓ is not prefix"
+                if (omega1 == null) throw "Right function at ↓ is not prefix"
+
+                const result = Functions.rank_prefix(alpha1, omega1)(w)
+
+                return result
+            },
+            (a, w) => {
+                if (alpha2 == null) throw "Left function at ↓ is not infix"
+                if (omega2 == null) throw "Right function at ↓ is not infix"
+
+                const result = Functions.rank_infix(alpha2, omega2)(a, w)
+
+                return result
+            }
         ]
     },
     '¤': ([alpha1, alpha2], [omega1, omega2]) => {
@@ -903,6 +923,7 @@ export const symbol_names = {
         '→': 'Bind Right',
         '←': 'Bind Left',
         '↑': 'Repeat',
+        '↓': 'Rank',
         '@': 'Choose',
     }
 }

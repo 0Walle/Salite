@@ -48,7 +48,7 @@ const string_re = /^'((?:\\.|[^'])+)'/
 const func_re = /^([+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨λ√⊣⊢!?]|:[+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨]|[A-Z][a-z_]*)/
 
 const monad_re = /^([\\/¨`´§]|\.[a-z][a-z_]*)/
-const dyad_re = /^([•°←↑→@¤]|\.[A-Z][a-z_]*)/
+const dyad_re = /^([•°←↑→↓@¤]|\.[A-Z][a-z_]*)/
 
 export function tokenize(text: string, quiet = false): Token[] {
 
