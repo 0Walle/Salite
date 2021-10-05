@@ -282,6 +282,20 @@ function makeString(str) {
         a.length
     ], a);
 }
+function rank_operator(array, rank) {
+    if (rank == 0) throw "Rank Error";
+    rank = rank > array._shape.length ? array._shape.length : rank;
+    const new_shape = array._shape.slice(-rank);
+    const stride = array._shape.slice(array._shape.length - rank).reduce((a, b)=>a * b
+    );
+    const length = array._data.length;
+    const indexes = [];
+    for(let i = 0; i < length; i += stride){
+        indexes.push(new MultiArray(new_shape, new Array(stride).fill(0).map((_, j)=>array._data[i + j]
+        )));
+    }
+    return indexes;
+}
 function makeArithPrefix(num) {
     const rec = (x)=>{
         return x.map((w)=>{
@@ -890,6 +904,32 @@ const table = (f)=>(a, w)=>{
         ], data);
     }
 ;
+const rank_prefix = (f, g)=>(w)=>{
+        const rank = takeScalar(g(w));
+        const ranked = rank_operator(w, rank).map((x)=>f(x)
+        );
+        console.log(ranked);
+        let first = ranked[0];
+        const result = ranked.reduce((acc, v)=>{
+            if (!MultiArray.same_shape(first, v)) throw "Shape Error";
+            return acc.concat(v);
+        });
+        return result.reshape(w._shape);
+    }
+;
+const rank_infix = (f, g)=>(a, w)=>{
+        const rank = takeScalar(g(a, w));
+        const ranked = rank_operator(w, rank).map((x)=>f(a, x)
+        );
+        console.log(ranked);
+        let first = ranked[0];
+        const result = ranked.reduce((acc, v)=>{
+            if (!MultiArray.same_shape(first, v)) throw "Shape Error";
+            return acc.concat(v);
+        });
+        return result.reshape(w._shape);
+    }
+;
 var TokenType;
 (function(TokenType) {
     TokenType[TokenType["Func"] = 0] = "Func";
@@ -987,7 +1027,7 @@ const value_re = /^([a-z][a-z_]*)/;
 const string_re = /^'((?:\\.|[^'])+)'/;
 const func_re = /^([+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨λ√⊣⊢!?]|:[+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨]|[A-Z][a-z_]*)/;
 const monad_re = /^([\\/¨`´§]|\.[a-z][a-z_]*)/;
-const dyad_re = /^([•°←↑→@¤]|\.[A-Z][a-z_]*)/;
+const dyad_re = /^([•°←↑→↓@¤]|\.[A-Z][a-z_]*)/;
 function tokenize(text, quiet = false) {
     let match;
     let tokens = [];
@@ -2050,7 +2090,7 @@ const builtin_monads = {
             (w)=>{
                 const slices = w.firstAxisToArray();
                 const new_cells = [
-                    w.slice(slices[0])
+                    unwrapBox(w.slice(slices[0]))
                 ];
                 slices.slice(1).forEach((slice, i)=>{
                     const a_ = makeBox(new_cells[i]);
@@ -2180,6 +2220,22 @@ const builtin_dyads = {
                 }
                 return result;
             }, 
+        ];
+    },
+    '↓': ([alpha1, alpha2], [omega1, omega2])=>{
+        return [
+            (w)=>{
+                if (alpha1 == null) throw "Left function at ↓ is not prefix";
+                if (omega1 == null) throw "Right function at ↓ is not prefix";
+                const result = rank_prefix(alpha1, omega1)(w);
+                return result;
+            },
+            (a, w)=>{
+                if (alpha2 == null) throw "Left function at ↓ is not infix";
+                if (omega2 == null) throw "Right function at ↓ is not infix";
+                const result = rank_infix(alpha2, omega2)(a, w);
+                return result;
+            }
         ];
     },
     '¤': ([alpha1, alpha2], [omega1, omega2])=>{
@@ -2700,6 +2756,7 @@ const symbol_names1 = {
         '→': 'Bind Right',
         '←': 'Bind Left',
         '↑': 'Repeat',
+        '↓': 'Rank',
         '@': 'Choose'
     }
 };
