@@ -49,7 +49,7 @@ class MultiArray {
             s
         ];
         if (lt.rank != 0 && !_same_shape(lt._shape, gt._shape.slice(-lt.rank))) throw "Shape Error";
-        const lt_len = lt._data.length;
+        lt._data.length;
         const gt_len = gt._data.length;
         let data = Array(gt_len);
         const stride = lt.rank == 0 ? 0 : 1 / gt._strides[lt.rank - 1];
@@ -526,7 +526,7 @@ const drop = (x, y)=>{
     ));
 };
 const first = (x)=>{
-    if (!x._data[0]) return makeEmpty();
+    if (x._data.length == 0) return makeEmpty();
     return makeBox(x._data[0]);
 };
 const first_cell = (y)=>{
@@ -549,7 +549,7 @@ const pick = (x, y)=>{
     }
 };
 const pick_indexes = (a, w)=>{
-    const j = w._data;
+    w._data;
     if (a.rank == 0) {
         const n = takeScalar(a);
         return [
@@ -779,8 +779,8 @@ const depth = (x)=>{
     return makeScalar(value_depth(x));
 };
 function compare_values(a, b) {
-    if (!cmp_scalar_le(a, b)) return 1;
-    if (!cmp_scalar_ge(a, b)) return -1;
+    if (!cmp_scalar_le(unwrapBox(a), unwrapBox(b))) return 1;
+    if (!cmp_scalar_ge(unwrapBox(a), unwrapBox(b))) return -1;
     return 0;
 }
 const grade_up = (x)=>{
@@ -828,7 +828,7 @@ const reduce = (f)=>(w)=>{
         if (w.length == undefined) return w;
         const result = w.map(makeBox).reduce(f);
         if (result.rank == 0) return result._data[0];
-        return result;
+        return result.map(unwrapBox);
     }
 ;
 const each = (f)=>(w)=>{
@@ -908,7 +908,6 @@ const rank_prefix = (f, g)=>(w)=>{
         const rank = takeScalar(g(w));
         const ranked = rank_operator(w, rank).map((x)=>f(x)
         );
-        console.log(ranked);
         let first = ranked[0];
         const result = ranked.reduce((acc, v)=>{
             if (!MultiArray.same_shape(first, v)) throw "Shape Error";
@@ -921,7 +920,6 @@ const rank_infix = (f, g)=>(a, w)=>{
         const rank = takeScalar(g(a, w));
         const ranked = rank_operator(w, rank).map((x)=>f(a, x)
         );
-        console.log(ranked);
         let first = ranked[0];
         const result = ranked.reduce((acc, v)=>{
             if (!MultiArray.same_shape(first, v)) throw "Shape Error";
@@ -956,8 +954,8 @@ class Token {
     kind;
     value;
     col;
-    constructor(kind1, v){
-        this.kind = kind1;
+    constructor(kind, v){
+        this.kind = kind;
         this.value = v;
     }
     static Number(n) {
@@ -1236,7 +1234,7 @@ function parse_try_def_or_guard(ctx) {
         case TokenType.Func:
             {
                 const [is_def, ...tail_] = tail;
-                if (is_def.kind != TokenType.Define) break;
+                if (is_def == undefined || is_def.kind != TokenType.Define) break;
                 ctx.code = tail_;
                 const expr = parse_expr(ctx);
                 if (expr == null) throw "Invalid code, expected expression";
@@ -1446,7 +1444,8 @@ function parse_derv(ctx, first) {
                     };
                     break;
                 }
-            default: break loop;
+            default:
+                break loop;
         }
     }
     if (result === null) {
@@ -1527,31 +1526,34 @@ function parse(text) {
         exprs.push(expr);
         if (ctx.code.length == 0) break;
         if (ctx.code[0].kind != TokenType.Sep) throw "Invalid code, expected separator";
-        ctx.code.shift();
+        while(ctx.code[0] && ctx.code[0].kind == TokenType.Sep){
+            ctx.code.shift();
+        }
+        if (ctx.code.length == 0) break;
     }
     return exprs;
 }
 class SaliteError extends Error {
     span;
-    constructor(message, col1){
+    constructor(message, col){
         super(message);
         this.name = "Evaluation Error";
-        this.span = col1;
+        this.span = col;
     }
 }
 class SaliteArityError extends SaliteError {
     at;
     expected;
-    constructor(expected1, at1, col2){
-        let _a = expected1 == 1 ? 'prefix' : 'infix';
-        let message1 = `Arity Error: Function is not ${_a}`;
-        if (at1) {
-            message1 = `Arity Error: Function at ${at1} is not ${_a}`;
+    constructor(expected, at, col){
+        let _a = expected == 1 ? 'prefix' : 'infix';
+        let message = `Arity Error: Function is not ${_a}`;
+        if (at) {
+            message = `Arity Error: Function at ${at} is not ${_a}`;
         }
-        super(message1, col2);
+        super(message, col);
         this.name = "Arity Error";
-        this.at = at1;
-        this.expected = expected1;
+        this.at = at;
+        this.expected = expected;
     }
 }
 function pretty_value_(v) {
@@ -1584,7 +1586,7 @@ function pretty_value_(v) {
                 ];
             case 'object':
                 {
-                    let string = pretty_value_(makeBox(single));
+                    let string = pretty_value_(single);
                     let len = string[0].length;
                     return [
                         `┌`.padEnd(len + 4),
@@ -1882,13 +1884,18 @@ const builtin_functions = {
         null
     ],
     'Type': [
-        (w)=>w.map((x)=>({
+        (w)=>{
+            const o = makeEmpty();
+            return w.map((x)=>{
+                let t = {
                     s: ' ',
                     n: 0,
-                    o: makeEmpty()
-                })[(typeof x)[0]]
-            )
-        ,
+                    o: o
+                }[(typeof x)[0]];
+                console.log(typeof x, x);
+                return t;
+            });
+        },
         null
     ],
     '?': [
