@@ -275,7 +275,7 @@ export const drop: Infix = (x, y) => {
 }
 
 export const first: Prefix = (x) => {
-    if (!x._data[0]) return makeEmpty()
+    if (x._data.length == 0) return makeEmpty()
     return makeBox(x._data[0])
 }
 
@@ -562,8 +562,8 @@ export const depth: Prefix = (x) => {
 
 
 function compare_values(a: Value, b: Value): number {
-    if (!cmp_scalar_le(a, b)) return 1
-    if (!cmp_scalar_ge(a, b)) return -1
+    if (!cmp_scalar_le(unwrapBox(a), unwrapBox(b))) return 1
+    if (!cmp_scalar_ge(unwrapBox(a), unwrapBox(b))) return -1
     return 0
 }
 
@@ -571,7 +571,7 @@ export const grade_up: Prefix = (x) => {
     const slices = x.firstAxisToArray()
     const sliced = slices.map(s => x.slice(s))
 
-    const indices = slices.map((_, i) => i).sort((a, b) => {
+    const indices = slices.map((_, i) => i).sort((a, b) => {        
         return compare_values(sliced[a], sliced[b])
     })
 
@@ -623,7 +623,8 @@ export const reduce: (f: Infix) => Prefix = (f) => (w) => {
     const result = w.map(makeBox).reduce(f)
 
     if (result.rank == 0) return result._data[0]
-    return result
+
+    return result.map(unwrapBox)
 }
 
 export const each: (f: Prefix) => Prefix = (f) => (w) => {
@@ -716,8 +717,6 @@ export const rank_prefix: (f: Prefix, g: Prefix) => Prefix = (f, g) => (w) => {
 
     const ranked = rank_operator(w, rank).map(x => f(x))
 
-    console.log(ranked)
-
     let first = ranked[0]
 
     const result = ranked.reduce((acc, v) => {
@@ -733,8 +732,6 @@ export const rank_infix: (f: Infix, g: Infix) => Infix = (f, g) => (a, w) => {
     const rank = takeScalar(g(a, w))
 
     const ranked = rank_operator(w, rank).map(x => f(a, x))
-
-    console.log(ranked)
 
     let first = ranked[0]
 

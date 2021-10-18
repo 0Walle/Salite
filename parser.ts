@@ -288,7 +288,7 @@ function parse_try_def_or_guard(ctx: PCtx): Expr | null {
         case TokenType.Func: {
             const [is_def, ...tail_] = tail
 
-            if (is_def.kind != TokenType.Define) break
+            if (is_def == undefined || is_def.kind != TokenType.Define) break
 
             ctx.code = tail_
 
@@ -587,7 +587,12 @@ export function parse(text: string): Expr[] {
         if (ctx.code.length == 0) break
 
         if (ctx.code[0].kind != TokenType.Sep) throw "Invalid code, expected separator"
-        ctx.code.shift()
+
+        while (ctx.code[0] && ctx.code[0].kind == TokenType.Sep) {
+            ctx.code.shift()
+        }
+
+        if (ctx.code.length == 0) break
     }
 
     return exprs

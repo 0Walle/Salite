@@ -54,7 +54,7 @@ function pretty_value_(v: Value): string[] {
             case 'string':
                 return [`'${single}'`]
             case 'object': {
-                let string = pretty_value_(Functions.makeBox(single))
+                let string = pretty_value_(single)
 
                 let len = string[0].length
 
@@ -232,7 +232,15 @@ const builtin_functions: FuncMap = {
 
         return w
     }, null],
-    'Type': [(w) => w.map(x => ({s:' ',n: 0,o: Functions.makeEmpty()}[<'s'|'n'|'o'>(typeof x)[0]])), null],
+    'Type': [(w) => {
+        const o = Functions.makeEmpty()
+        return w.map(x => {
+            let t = ({s:' ',n: 0,o: o}[<'s'|'n'|'o'>(typeof x)[0]])
+            console.log(typeof x, x)
+            return t
+        
+        })
+    }, null],
     '?': [null, (a, w) => {
         if (w._data[0] == undefined) return a
         return w
@@ -968,4 +976,15 @@ Sort_up :: ∧→:¢,
 Sort_down :: ∨→:¢,
 Decode :: {+/ ω * (10?α) ^ φ ι=ω},
 Encode :: 1:>(φ φ→{(α;1):%:-%\ω;α}),
+*/
+
+/*
+Fac_rec :: {
+  ω>0 | α,
+  (α * ω) λ ω - 1
+},
+
+Fac :: (1→Fac_rec),
+
+[Fac 2, Fac 3, Fac 4]
 */
