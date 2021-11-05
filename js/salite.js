@@ -713,9 +713,11 @@ const enclose = (x)=>{
     ]);
 };
 function makeBox(v) {
+    if (v === undefined) return makeEmpty();
     return typeof v == 'object' ? v : makeScalar(v);
 }
 function unwrapBox(v) {
+    if (v._data.length == 0) return v;
     if (v.rank == 0) return v._data[0];
     return v;
 }
@@ -802,6 +804,46 @@ const grade_down = (x)=>{
         return compare_values(sliced[a], sliced[b]) * -1;
     });
     return makeArray(indices);
+};
+const sort_up = (x)=>{
+    const slices = x.firstAxisToArray();
+    const sliced = slices.map((s)=>x.slice(s)
+    );
+    const indices = slices.map((_, i)=>i
+    ).sort((a, b)=>{
+        return compare_values(sliced[a], sliced[b]);
+    });
+    return x.select(indices);
+};
+const sort_down = (x)=>{
+    const slices = x.firstAxisToArray();
+    const sliced = slices.map((s)=>x.slice(s)
+    );
+    const indices = slices.map((_, i)=>i
+    ).sort((a, b)=>{
+        return compare_values(sliced[a], sliced[b]) * -1;
+    });
+    return x.select(indices);
+};
+function encode(shape, index) {
+    let s = [
+        ...shape
+    ];
+    let r = Array(shape.length).fill(1);
+    let k = index;
+    while(s.length > 0){
+        let j = s.pop();
+        r[s.length] = j == 0 ? k : k % j;
+        k = Math.floor(j == 0 ? 0 : k / j);
+    }
+    return r;
+}
+const represent = (a, w)=>{
+    const shape = takeNumbers(a);
+    const result = w.map((x)=>makeArray(encode(shape, Number(x)))
+    );
+    if (result.rank == 0) return result._data[0];
+    return result;
 };
 const under_indices = (x)=>{
     const indices = takeNumbers(x);
@@ -1023,7 +1065,7 @@ class Token {
 const num_re = /^(?:(¬?)([0-9]+(?:\.[0-9]+)?))/;
 const value_re = /^([a-z][a-z_]*)/;
 const string_re = /^'((?:\\.|[^'])+)'/;
-const func_re = /^([+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨λ√⊣⊢!?]|:[+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨]|[A-Z][a-z_]*)/;
+const func_re = /^([+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨λ√⊣⊢!?τ]|:[+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨]|[A-Z][A-Za-z_]*)/;
 const monad_re = /^([\\/¨`´§]|\.[a-z][a-z_]*)/;
 const dyad_re = /^([•°←↑→↓@¤]|\.[A-Z][a-z_]*)/;
 function tokenize(text, quiet = false) {
@@ -1730,11 +1772,11 @@ const builtin_functions = {
         max
     ],
     '∧': [
-        grade_up,
+        sort_up,
         and
     ],
     '∨': [
-        grade_down,
+        sort_down,
         or
     ],
     '~': [
@@ -1830,14 +1872,18 @@ const builtin_functions = {
         select
     ],
     ':<': [
-        null,
+        grade_up,
         take
     ],
     ':>': [
-        null,
+        grade_down,
         drop
     ],
     'δ': [
+        null,
+        represent
+    ],
+    'Format': [
         (w)=>makeString(pretty_value1(w))
         ,
         (op, w)=>{
@@ -1850,7 +1896,7 @@ const builtin_functions = {
             }
         }
     ],
-    ':δ': [
+    'Parse': [
         (w)=>{
             return makeScalar(parseFloat(w._data.map(String).join('')));
         },
@@ -1883,7 +1929,7 @@ const builtin_functions = {
         },
         null
     ],
-    'Type': [
+    '?': [
         (w)=>{
             const o = makeEmpty();
             return w.map((x)=>{
@@ -1896,10 +1942,6 @@ const builtin_functions = {
                 return t;
             });
         },
-        null
-    ],
-    '?': [
-        null,
         (a, w)=>{
             if (w._data[0] == undefined) return a;
             return w;
@@ -2507,6 +2549,10 @@ const Cast1 = {
     number: (n)=>makeScalar(n)
     ,
     string: (s)=>makeString(s)
+    ,
+    nil: ()=>makeEmpty()
+    ,
+    array: (a)=>makeArray(a)
 };
 function tokens1(expr) {
     const table = {
@@ -2628,11 +2674,11 @@ const symbol_names1 = {
             'Maximum'
         ],
         '∧': [
-            'Grade Up',
+            'Sort Up',
             'And'
         ],
         '∨': [
-            'Grade Down',
+            'Sort Down',
             'Or'
         ],
         '~': [
@@ -2687,6 +2733,10 @@ const symbol_names1 = {
             'Shape',
             'Reshape'
         ],
+        'δ': [
+            null,
+            'Represent'
+        ],
         'φ': [
             'Reverse',
             'Rotate'
@@ -2728,24 +2778,20 @@ const symbol_names1 = {
             'Select'
         ],
         ':<': [
-            null,
+            'Grade Down',
             'Take'
         ],
         ':>': [
-            null,
+            'Grade Up',
             'Drop'
-        ],
-        'δ': [
-            'Format',
-            'Format'
-        ],
-        ':δ': [
-            'Parse',
-            'Parse Radix'
         ],
         '!': [
             'Assert',
             'Assert'
+        ],
+        '?': [
+            'Type',
+            'Or Else'
         ]
     },
     monads: {
