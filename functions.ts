@@ -488,10 +488,12 @@ export const enclose: Prefix = (x) => {
 }
 
 export function makeBox(v: number | string | Value): Value {
+    if (v === undefined) return makeEmpty()
     return typeof v == 'object' ? v : makeScalar(v)
 }
 
 export function unwrapBox(v: Value): number | string | Value {
+    if (v._data.length == 0) return v
     if (v.rank == 0) return v._data[0]
     return v
 }
@@ -588,6 +590,54 @@ export const grade_down: Prefix = (x) => {
 
     return makeArray(indices)
 }
+
+export const sort_up: Prefix = (x) => {
+    const slices = x.firstAxisToArray()
+    const sliced = slices.map(s => x.slice(s))
+
+    const indices = slices.map((_, i) => i).sort((a, b) => {        
+        return compare_values(sliced[a], sliced[b])
+    })
+
+    return x.select(indices)
+}
+
+export const sort_down: Prefix = (x) => {
+    const slices = x.firstAxisToArray()
+    const sliced = slices.map(s => x.slice(s))
+
+    const indices = slices.map((_, i) => i).sort((a, b) => {
+        return compare_values(sliced[a], sliced[b]) * -1
+    })
+
+    return x.select(indices)
+}
+
+function encode(shape: number[], index: number) {
+    let s = [...shape]
+
+    let r = Array(shape.length).fill(1)
+
+    let k = index
+    while (s.length > 0) {
+        let j = <number>s.pop()
+        r[s.length] = j == 0 ? k : k % j
+        k = Math.floor(j == 0 ? 0 : k / j)
+    }
+
+    return r
+}
+
+export const represent: Infix = (a, w) => {
+    const shape = takeNumbers(a)
+
+    const result = w.map(x => makeArray(encode(shape, Number(x))))
+
+    if (result.rank == 0) return result._data[0]
+
+    return result
+}
+
 
 export const under_indices: Prefix = (x) => {
     const indices = takeNumbers(x)

@@ -161,8 +161,8 @@ const builtin_functions: FuncMap = {
     ':^': [Functions.ln, Functions.log],
     ':-': [Functions.floor, Functions.min],
     ':+': [Functions.ceil, Functions.max],
-    '∧': [Functions.grade_up, Functions.and],
-    '∨': [Functions.grade_down, Functions.or],
+    '∧': [Functions.sort_up, Functions.and],
+    '∨': [Functions.sort_down, Functions.or],
     '~': [Functions.not, Functions.windows ],
 
     '≤': [null, Functions.cmp_le],
@@ -194,10 +194,12 @@ const builtin_functions: FuncMap = {
     '¢': [Functions.first, Functions.pick],
     ':¢': [Functions.first_cell, Functions.select],
 
-    ':<': [null, Functions.take],
-    ':>': [null, Functions.drop],    
+    ':<': [Functions.grade_up, Functions.take],
+    ':>': [Functions.grade_down, Functions.drop],
 
-    'δ': [(w) => Functions.makeString(pretty_value(w)), (op, w) => {
+    'δ': [null, Functions.represent],
+
+    'Format': [(w) => Functions.makeString(pretty_value(w)), (op, w) => {
         let n = Functions.takeScalar(op)
 
         switch (n) {
@@ -207,7 +209,7 @@ const builtin_functions: FuncMap = {
                 return Functions.makeString(pretty_value(w))
         }
     }],
-    ':δ': [(w) => {
+    'Parse': [(w) => {
         return Functions.makeScalar(parseFloat(w._data.map(String).join('')))
     }, (op, w) => {
         let str = w._data.map(String).join('')
@@ -232,7 +234,7 @@ const builtin_functions: FuncMap = {
 
         return w
     }, null],
-    'Type': [(w) => {
+    '?': [(w) => {
         const o = Functions.makeEmpty()
         return w.map(x => {
             let t = ({s:' ',n: 0,o: o}[<'s'|'n'|'o'>(typeof x)[0]])
@@ -240,8 +242,7 @@ const builtin_functions: FuncMap = {
             return t
         
         })
-    }, null],
-    '?': [null, (a, w) => {
+    }, (a, w) => {
         if (w._data[0] == undefined) return a
         return w
     }],
@@ -429,7 +430,7 @@ const builtin_monads: MonadMap = {
 
             return Functions.cellsInfix(alpha2)(a, w)
         } ]
-    },
+    }
 }
 
 const builtin_dyads: DyadMap = {
@@ -684,6 +685,7 @@ function evaluate(e: Expr, self: FuncDesc, context_alpha: Value, context_omega: 
                 return Functions.makeEmpty()
             }
             let vals = e.value.map(e => Functions.unwrapBox(evaluate(e, self, context_alpha, context_omega, globals, funcs)))
+
             return Functions.makeArray(vals)
         }
         
@@ -779,6 +781,8 @@ export function run(expr: string, globals: ValueMap, foreign: {[s: string]: (w: 
 export const Cast = {
     number: (n: number) => Functions.makeScalar(n),
     string: (s: string) => Functions.makeString(s),
+    nil: () => Functions.makeEmpty(),
+    array: (a: any[]) => Functions.makeArray(a),
 }
 
 export function tokens(expr: string): { kind: string, text: string }[] | null {
@@ -875,8 +879,8 @@ export const symbol_names = {
         ':-': ['Floor', 'Minimun'],
         ':+': ['Ceil', 'Maximum'],
 
-        '∧': ['Grade Up' , 'And'],        // num-1 --- ArithIn
-        '∨': ['Grade Down' , 'Or'],       // num-1 --- ArithIn
+        '∧': ['Sort Up' , 'And'],        // num-1 --- ArithIn
+        '∨': ['Sort Down' , 'Or'],       // num-1 --- ArithIn
         '~': ['Not', 'Windows' ],         // ArithPre --- any
 
         '≤': [null, 'Less Equals'],        // --- Comp
@@ -893,6 +897,7 @@ export const symbol_names = {
 
         'ι': ['Range', 'Indexof'],         // num-1 --- num-1
         'ρ': ['Shape', 'Reshape'],         // num-1 --- any
+        'δ': [null, 'Represent'],
         'φ': ['Reverse', 'Rotate'],        // any   --- any
         ':φ': ['Transpose', null],        // any   --- any
         'μ': ['Group Indices', 'Group'],   // box   --- box
@@ -908,13 +913,11 @@ export const symbol_names = {
         '¢': ['First', 'Pick'],
         ':¢': ['First Cell', 'Select'],
 
-        ':<': [null, 'Take'],
-        ':>': [null, 'Drop'],
+        ':<': ['Grade Down', 'Take'],
+        ':>': ['Grade Up', 'Drop'],
         
-
-        'δ': ['Format', 'Format'],
-        ':δ': ['Parse', 'Parse Radix'],
         '!': ['Assert', 'Assert'],
+        '?': ['Type', 'Or Else'],
     },
     monads: {
         '/':  'Fold',
@@ -971,11 +974,13 @@ Step :: {0;(table :¢§ Decode` 3 ~ ω);0},
 > :¢←' #'¨ (ι20) ({Step ω}↑⊣)¨ < (20ρ[0]);1;0
 */
 
-/*
+/* OBSOLETE!!!!!!!
 Sort_up :: ∧→:¢,
 Sort_down :: ∨→:¢,
 Decode :: {+/ ω * (10?α) ^ φ ι=ω},
 Encode :: 1:>(φ φ→{(α;1):%:-%\ω;α}),
+
+Encode2 :: {α:%:-•%\¤φ1:>α;ω}
 */
 
 /*
