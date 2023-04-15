@@ -1,6 +1,9 @@
+// deno-fmt-ignore-file
+// deno-lint-ignore-file
+// This code was bundled using `deno bundle` and it's not recommended to edit it manually
+
 const _same_shape = (x, y)=>{
-    return x.length == y.length && x.every((n, i)=>y[i] == n
-    );
+    return x.length == y.length && x.every((n, i)=>y[i] == n);
 };
 class MultiArray {
     _shape;
@@ -24,9 +27,7 @@ class MultiArray {
                 1
             ];
         } else {
-            this._strides = shape.map((_, i)=>shape.slice(i + 1).reduce((a, b)=>a * b
-                , 1)
-            );
+            this._strides = shape.map((_, i)=>shape.slice(i + 1).reduce((a, b)=>a * b, 1));
         }
     }
     static from(iter) {
@@ -81,8 +82,7 @@ class MultiArray {
     reduce(f) {
         const last = this._shape[this._shape.length - 1];
         const new_shape = this._shape.slice(0, -1);
-        const new_count = new_shape.reduce((a, b)=>a * b
-        , 1);
+        const new_count = new_shape.reduce((a, b)=>a * b, 1);
         const new_data = Array(new_count);
         for(let i = 0; i < this._data.length; i++){
             const j = Math.floor(i / last);
@@ -97,8 +97,7 @@ class MultiArray {
     reduceWith(f, init) {
         const last = this._shape[this._shape.length - 1];
         const new_shape = this._shape.slice(0, -1);
-        const new_count = new_shape.reduce((a, b)=>a * b
-        );
+        const new_count = new_shape.reduce((a, b)=>a * b);
         const new_data = Array(new_count);
         for(let i = 0; i < this._data.length; i++){
             const j = Math.floor(i / last);
@@ -113,8 +112,7 @@ class MultiArray {
         if (!_same_shape(this._shape, other._shape)) {
             return false;
         }
-        return this._data.every((n, i)=>equals(other._data[i], n)
-        );
+        return this._data.every((n, i)=>equals(other._data[i], n));
     }
     solo() {
         return new MultiArray([
@@ -129,8 +127,7 @@ class MultiArray {
         let b = that._shape.length > 0 ? that._shape : [
             1
         ];
-        if (a.length == b.length) {
-        } else if (a.length == b.length + 1) {
+        if (a.length == b.length) {} else if (a.length == b.length + 1) {
             b = [
                 1,
                 ...b
@@ -168,8 +165,7 @@ class MultiArray {
         ], this._data);
     }
     reshape(shape) {
-        const length = Math.floor(shape.reduce((a, b)=>a * b
-        , 1));
+        const length = Math.floor(shape.reduce((a, b)=>a * b, 1));
         if (isNaN(length)) throw "Length Error";
         if (length < 0) throw "Length Error";
         if (length > this._data.length) {
@@ -211,9 +207,7 @@ class MultiArray {
     }
     get(index) {
         if (index.length != this._shape.length) throw "Length Error";
-        const i = index.map((x, i)=>(x < 0 ? this._shape[i] + x : x) * this._strides[i]
-        ).reduce((a, b)=>a + b
-        );
+        const i = index.map((x, i)=>(x < 0 ? this._shape[i] + x : x) * this._strides[i]).reduce((a, b)=>a + b);
         if (i >= this._data.length) throw "Index Error";
         return this._data[i];
     }
@@ -286,13 +280,11 @@ function rank_operator(array, rank) {
     if (rank == 0) throw "Rank Error";
     rank = rank > array._shape.length ? array._shape.length : rank;
     const new_shape = array._shape.slice(-rank);
-    const stride = array._shape.slice(array._shape.length - rank).reduce((a, b)=>a * b
-    );
+    const stride = array._shape.slice(array._shape.length - rank).reduce((a, b)=>a * b);
     const length = array._data.length;
     const indexes = [];
     for(let i = 0; i < length; i += stride){
-        indexes.push(new MultiArray(new_shape, new Array(stride).fill(0).map((_, j)=>array._data[i + j]
-        )));
+        indexes.push(new MultiArray(new_shape, new Array(stride).fill(0).map((_, j)=>array._data[i + j])));
     }
     return indexes;
 }
@@ -325,53 +317,35 @@ function makeArithInfix(num) {
     };
     return rec;
 }
-const add = makeArithInfix((x, y)=>x + y
-);
-const neg = makeArithPrefix((x)=>-x
-);
-const sub = makeArithInfix((x, y)=>x - y
-);
+const add = makeArithInfix((x, y)=>x + y);
+const neg = makeArithPrefix((x)=>-x);
+const sub = makeArithInfix((x, y)=>x - y);
 const sign = makeArithPrefix(Math.sign);
-const mult = makeArithInfix((x, y)=>x * y
-);
-const recp = makeArithPrefix((x)=>1 / x
-);
-const div = makeArithInfix((x, y)=>x / y
-);
+const mult = makeArithInfix((x, y)=>x * y);
+const recp = makeArithPrefix((x)=>1 / x);
+const div = makeArithInfix((x, y)=>x / y);
 const exp = makeArithPrefix(Math.exp);
-const pow = makeArithInfix((x, y)=>x ** y
-);
+const pow = makeArithInfix((x, y)=>x ** y);
 const ln = makeArithPrefix(Math.log);
-const root = makeArithInfix((x, y)=>y ** (1 / x)
-);
+const root = makeArithInfix((x, y)=>y ** (1 / x));
 const sqrt = makeArithPrefix(Math.sqrt);
-const log = makeArithInfix((x, y)=>Math.log(y) / Math.log(x)
-);
+const log = makeArithInfix((x, y)=>Math.log(y) / Math.log(x));
 const abs = makeArithPrefix(Math.abs);
-const mod = makeArithInfix((x, y)=>x == 0 ? y : y % x
-);
+const mod = makeArithInfix((x, y)=>x == 0 ? y : y % x);
 const floor = makeArithPrefix(Math.floor);
-const min = makeArithInfix((x, y)=>Math.min(x, y)
-);
+const min = makeArithInfix((x, y)=>Math.min(x, y));
 const ceil = makeArithPrefix(Math.ceil);
-const max = makeArithInfix((x, y)=>Math.max(x, y)
-);
-const and = makeArithInfix((x, y)=>x & y
-);
-const or = makeArithInfix((x, y)=>x | y
-);
-const not = makeArithPrefix((x)=>1 - x
-);
+const max = makeArithInfix((x, y)=>Math.max(x, y));
+const and = makeArithInfix((x, y)=>x & y);
+const or = makeArithInfix((x, y)=>x | y);
+const not = makeArithPrefix((x)=>1 - x);
 const length = (x)=>{
     if (x._data.length == 0) return makeScalar(0);
     return makeScalar(x._shape[0] ?? 1);
 };
-const rank = (x)=>makeScalar(x._shape.length)
-;
-const shape1 = (x)=>makeArray(x._shape)
-;
-const count = (x)=>makeScalar(x._data.length)
-;
+const rank = (x)=>makeScalar(x._shape.length);
+const shape = (x)=>makeArray(x._shape);
+const count = (x)=>makeScalar(x._data.length);
 function cmp_scalar_le(x, y) {
     let s = typeof x, t = typeof y;
     return +(s != t ? s <= t : x <= y);
@@ -387,8 +361,7 @@ function cmp_scalar_eq(x, y) {
     return +(x == y);
 }
 const cmp_lt = (x, y)=>{
-    return MultiArray.zip(x, y, (x, y)=>1 - cmp_scalar_ge(x, y)
-    );
+    return MultiArray.zip(x, y, (x, y)=>1 - cmp_scalar_ge(x, y));
 };
 const cmp_le = (x, y)=>{
     return MultiArray.zip(x, y, cmp_scalar_le);
@@ -397,30 +370,22 @@ const cmp_ge = (x, y)=>{
     return MultiArray.zip(x, y, cmp_scalar_ge);
 };
 const cmp_gt = (x, y)=>{
-    return MultiArray.zip(x, y, (x, y)=>1 - cmp_scalar_le(x, y)
-    );
+    return MultiArray.zip(x, y, (x, y)=>1 - cmp_scalar_le(x, y));
 };
 const cmp_eq = (x, y)=>{
     return MultiArray.zip(x, y, cmp_scalar_eq);
 };
 const cmp_ne = (x, y)=>{
-    return MultiArray.zip(x, y, (x, y)=>1 - cmp_scalar_eq(x, y)
-    );
+    return MultiArray.zip(x, y, (x, y)=>1 - cmp_scalar_eq(x, y));
 };
 function match_values(a, b) {
-    return a.match(b, (x, y)=>!!cmp_scalar_eq(x, y)
-    );
+    return a.match(b, (x, y)=>!!cmp_scalar_eq(x, y));
 }
-const match = (x, y)=>makeScalar(+match_values(x, y))
-;
-const not_match = (x, y)=>makeScalar(+!match_values(x, y))
-;
-const id = (x)=>x
-;
-const left = (x, y)=>x
-;
-const right = (x, y)=>y
-;
+const match = (x, y)=>makeScalar(+match_values(x, y));
+const not_match = (x, y)=>makeScalar(+!match_values(x, y));
+const id = (x)=>x;
+const left = (x, y)=>x;
+const right = (x, y)=>y;
 const join = (x, y)=>{
     if (x._data.length == 0) return y;
     if (y._data.length == 0) return x;
@@ -429,8 +394,7 @@ const join = (x, y)=>{
 const couple = (x, y)=>{
     return x.couple(y);
 };
-const deshape = (x)=>x.deshape()
-;
+const deshape = (x)=>x.deshape();
 const reshape = (x, y)=>{
     if (x.rank > 1) throw "Rank Error";
     let shape = x._data.map(Number);
@@ -439,13 +403,11 @@ const reshape = (x, y)=>{
 const iota = (x)=>{
     if (x.rank > 1) throw "Rank Error";
     let shape = x._data.map(Number);
-    const length = Math.floor(shape.reduce((a, b)=>a * b
-    ));
+    const length = Math.floor(shape.reduce((a, b)=>a * b));
     if (isNaN(length)) throw "Length Error";
     if (length < 0) throw "Length Error";
     if (length == 0) return makeEmpty();
-    const data = Array(length).fill(0).map((_, i)=>i
-    );
+    const data = Array(length).fill(0).map((_, i)=>i);
     return new MultiArray(shape, data).reshape(shape);
 };
 function takeScalar(x) {
@@ -461,14 +423,12 @@ function takeNumbers(x) {
     return n;
 }
 function gen_iota(len, f) {
-    return Array(len).fill(undefined).map((_, i)=>f(i)
-    );
+    return Array(len).fill(undefined).map((_, i)=>f(i));
 }
 const reverse = (v)=>{
     const len = v.length;
     if (len === undefined) return v;
-    const slices = gen_iota(len, (i)=>len - 1 - i
-    );
+    const slices = gen_iota(len, (i)=>len - 1 - i);
     return v.select(slices);
 };
 const rotate = (x, y)=>{
@@ -476,13 +436,7 @@ const rotate = (x, y)=>{
     const len = y.length;
     if (len === undefined) return y;
     let rotated_slices;
-    if (n > 0) {
-        rotated_slices = Array(len).fill(0).map((_, i)=>(i + n % len) % len
-        );
-    } else {
-        rotated_slices = Array(len).fill(0).map((_, i)=>(i + (len - n % len)) % len
-        );
-    }
+    rotated_slices = Array(len).fill(0).map((_, i)=>(i + (len - n % len)) % len);
     const rotated = y.select(rotated_slices);
     return rotated;
 };
@@ -508,22 +462,18 @@ const take = (x, y)=>{
     const len = y.length;
     if (len === undefined) return y;
     if (n >= 0) {
-        return y.select(gen_iota(n, (i)=>i
-        ));
+        return y.select(gen_iota(n, (i)=>i));
     }
-    return y.select(gen_iota(-n, (i)=>len + n + i
-    ));
+    return y.select(gen_iota(-n, (i)=>len + n + i));
 };
 const drop = (x, y)=>{
     const n = takeScalar(x);
     const len = y.length;
     if (len === undefined) return y;
     if (n >= 0) {
-        return y.select(gen_iota(len - n, (i)=>i + n
-        ));
+        return y.select(gen_iota(len - n, (i)=>i + n));
     }
-    return y.select(gen_iota(len + n, (i)=>i
-    ));
+    return y.select(gen_iota(len + n, (i)=>i));
 };
 const first = (x)=>{
     if (x._data.length == 0) return makeEmpty();
@@ -543,8 +493,7 @@ const pick = (x, y)=>{
         let n = takeNumbers(x);
         return makeBox(y.get(n));
     } catch  {
-        const result = x.map((i)=>pick(makeBox(i), y)._data[0]
-        );
+        const result = x.map((i)=>pick(makeBox(i), y)._data[0]);
         return result;
     }
 };
@@ -559,16 +508,13 @@ const pick_indexes = (a, w)=>{
     try {
         let n = takeNumbers(a);
         if (n.length != w._shape.length) throw "Length Error";
-        const i = n.map((x, i)=>(x < 0 ? w._shape[i] + x : x) * w._strides[i]
-        ).reduce((a, b)=>a + b
-        );
+        const i = n.map((x, i)=>(x < 0 ? w._shape[i] + x : x) * w._strides[i]).reduce((a, b)=>a + b);
         if (i >= w._data.length) throw "Index Error";
         return [
             i
         ];
     } catch  {
-        const result = a.map((i)=>pick_indexes(makeBox(i), w)
-        )._data.flat();
+        const result = a.map((i)=>pick_indexes(makeBox(i), w))._data.flat();
         return result;
     }
 };
@@ -605,32 +551,26 @@ const indexof = (x, y)=>{
 };
 const indices = (x)=>{
     const n = takeNumbers(x);
-    const data = n.flatMap((n, i)=>Array(n).fill(i)
-    );
+    const data = n.flatMap((n, i)=>Array(n).fill(i));
     return makeArray(data);
 };
 const replicate = (x, y)=>{
     const indices_list = takeNumbers(x);
     if (y.length !== indices_list.length) throw "Lenght Error";
-    const indices = indices_list.flatMap((n, i)=>Array(n).fill(i)
-    );
+    const indices = indices_list.flatMap((n, i)=>Array(n).fill(i));
     return y.select(indices);
 };
 const mark_firsts = (x)=>{
     if (x.rank != 1) throw "Shape Error";
     const uniques = new Set();
-    const data = x.map((n)=>uniques.has(n) ? 0 : (uniques.add(n), 1)
-    );
+    const data = x.map((n)=>uniques.has(n) ? 0 : (uniques.add(n), 1));
     return data;
 };
 const unique = (x)=>{
     if (x.rank != 1) throw "Shape Error";
     const uniques = [];
-    const has = (v)=>uniques.some((u)=>cmp_scalar_eq(u, v)
-        )
-    ;
-    const data = x._data.filter((n)=>has(n) ? false : (uniques.push(n), true)
-    );
+    const has = (v)=>uniques.some((u)=>cmp_scalar_eq(u, v));
+    const data = x._data.filter((n)=>has(n) ? false : (uniques.push(n), true));
     return makeArray(data);
 };
 const group = (x, y)=>{
@@ -649,11 +589,10 @@ const group = (x, y)=>{
         }
     }
     if (data.length == 0) return makeEmpty();
-    for(let i1 = 0; i1 < data.length; i1++){
-        if (data[i1] == undefined) data[i1] = [];
+    for(let i = 0; i < data.length; i++){
+        if (data[i] == undefined) data[i] = [];
     }
-    const boxes = data.map((slices)=>y.select(slices)
-    );
+    const boxes = data.map((slices)=>y.select(slices));
     return new MultiArray([
         data.length
     ], boxes);
@@ -669,8 +608,7 @@ const group_indices = (x)=>{
     for(let i = 0; i < data.length; i++){
         if (data[i] == undefined) data[i] = [];
     }
-    return makeArray(data.map((x)=>makeArray(x)
-    ));
+    return makeArray(data.map((x)=>makeArray(x)));
 };
 const find = (pat, x)=>{
     if (x.rank == 0) throw "Rank Error";
@@ -753,8 +691,8 @@ const windows = (n, x)=>{
         });
     }
     let data = [];
-    for(let i1 = 0; i1 < windows.length; i1++){
-        const slice = windows[i1];
+    for(let i = 0; i < windows.length; i++){
+        const slice = windows[i];
         data = data.concat(x._data.slice(slice.start, slice.end));
     }
     return new MultiArray([
@@ -787,40 +725,32 @@ function compare_values(a, b) {
 }
 const grade_up = (x)=>{
     const slices = x.firstAxisToArray();
-    const sliced = slices.map((s)=>x.slice(s)
-    );
-    const indices = slices.map((_, i)=>i
-    ).sort((a, b)=>{
+    const sliced = slices.map((s)=>x.slice(s));
+    const indices = slices.map((_, i)=>i).sort((a, b)=>{
         return compare_values(sliced[a], sliced[b]);
     });
     return makeArray(indices);
 };
 const grade_down = (x)=>{
     const slices = x.firstAxisToArray();
-    const sliced = slices.map((s)=>x.slice(s)
-    );
-    const indices = slices.map((_, i)=>i
-    ).sort((a, b)=>{
+    const sliced = slices.map((s)=>x.slice(s));
+    const indices = slices.map((_, i)=>i).sort((a, b)=>{
         return compare_values(sliced[a], sliced[b]) * -1;
     });
     return makeArray(indices);
 };
 const sort_up = (x)=>{
     const slices = x.firstAxisToArray();
-    const sliced = slices.map((s)=>x.slice(s)
-    );
-    const indices = slices.map((_, i)=>i
-    ).sort((a, b)=>{
+    const sliced = slices.map((s)=>x.slice(s));
+    const indices = slices.map((_, i)=>i).sort((a, b)=>{
         return compare_values(sliced[a], sliced[b]);
     });
     return x.select(indices);
 };
 const sort_down = (x)=>{
     const slices = x.firstAxisToArray();
-    const sliced = slices.map((s)=>x.slice(s)
-    );
-    const indices = slices.map((_, i)=>i
-    ).sort((a, b)=>{
+    const sliced = slices.map((s)=>x.slice(s));
+    const indices = slices.map((_, i)=>i).sort((a, b)=>{
         return compare_values(sliced[a], sliced[b]) * -1;
     });
     return x.select(indices);
@@ -840,8 +770,7 @@ function encode(shape, index) {
 }
 const represent = (a, w)=>{
     const shape = takeNumbers(a);
-    const result = w.map((x)=>makeArray(encode(shape, Number(x)))
-    );
+    const result = w.map((x)=>makeArray(encode(shape, Number(x))));
     if (result.rank == 0) return result._data[0];
     return result;
 };
@@ -859,20 +788,17 @@ const under_indices = (x)=>{
     return makeArray(data);
 };
 function underBoxPrefix(f) {
-    return (v)=>unwrapBox(f(makeBox(v)))
-    ;
+    return (v)=>unwrapBox(f(makeBox(v)));
 }
 function underBoxInfix(f) {
-    return (a, b)=>unwrapBox(f(makeBox(a), makeBox(b)))
-    ;
+    return (a, b)=>unwrapBox(f(makeBox(a), makeBox(b)));
 }
 const reduce = (f)=>(w)=>{
         if (w.length == undefined) return w;
         const result = w.map(makeBox).reduce(f);
         if (result.rank == 0) return result._data[0];
         return result.map(unwrapBox);
-    }
-;
+    };
 const each = (f)=>(w)=>{
         let data = [];
         for(let index = 0; index < w._data.length; index++){
@@ -880,8 +806,7 @@ const each = (f)=>(w)=>{
             data.push(result);
         }
         return new MultiArray(w._shape, data, w._strides);
-    }
-;
+    };
 const cellsPrefix = (f)=>(w)=>{
         const cells = w.firstAxisToArray();
         let data = [];
@@ -890,8 +815,7 @@ const cellsPrefix = (f)=>(w)=>{
             const cell = f(w.slice(slice));
             if (shape == null) {
                 shape = cell._shape;
-            } else if (cell._shape.length != shape.length || !cell._shape.every((n, i)=>n == shape[i]
-            )) {
+            } else if (cell._shape.length != shape.length || !cell._shape.every((n, i)=>n == shape[i])) {
                 throw "Shape Error";
             }
             data = data.concat(cell._data);
@@ -901,8 +825,7 @@ const cellsPrefix = (f)=>(w)=>{
             w.length,
             ...shape
         ], data);
-    }
-;
+    };
 const cellsInfix = (f)=>(a, w)=>{
         if (a.length != w.length) throw "Length Error";
         const a_arr = a.firstAxisToArray();
@@ -915,8 +838,7 @@ const cellsInfix = (f)=>(a, w)=>{
             const result = f(x, y);
             if (shape == null) {
                 shape = result._shape;
-            } else if (result._shape.length != shape.length || !result._shape.every((n, i)=>n == shape[i]
-            )) {
+            } else if (result._shape.length != shape.length || !result._shape.every((n, i)=>n == shape[i])) {
                 throw "Shape Error";
             }
             data = data.concat(result._data);
@@ -926,8 +848,7 @@ const cellsInfix = (f)=>(a, w)=>{
             a_arr.length,
             ...shape
         ], data);
-    }
-;
+    };
 const table = (f)=>(a, w)=>{
         const a_arr = a.firstAxisToArray();
         const w_arr = w.firstAxisToArray();
@@ -944,32 +865,27 @@ const table = (f)=>(a, w)=>{
             a_arr.length,
             w_arr.length
         ], data);
-    }
-;
+    };
 const rank_prefix = (f, g)=>(w)=>{
         const rank = takeScalar(g(w));
-        const ranked = rank_operator(w, rank).map((x)=>f(x)
-        );
+        const ranked = rank_operator(w, rank).map((x)=>f(x));
         let first = ranked[0];
         const result = ranked.reduce((acc, v)=>{
             if (!MultiArray.same_shape(first, v)) throw "Shape Error";
             return acc.concat(v);
         });
         return result.reshape(w._shape);
-    }
-;
+    };
 const rank_infix = (f, g)=>(a, w)=>{
         const rank = takeScalar(g(a, w));
-        const ranked = rank_operator(w, rank).map((x)=>f(a, x)
-        );
+        const ranked = rank_operator(w, rank).map((x)=>f(a, x));
         let first = ranked[0];
         const result = ranked.reduce((acc, v)=>{
             if (!MultiArray.same_shape(first, v)) throw "Shape Error";
             return acc.concat(v);
         });
         return result.reshape(w._shape);
-    }
-;
+    };
 var TokenType;
 (function(TokenType) {
     TokenType[TokenType["Func"] = 0] = "Func";
@@ -990,8 +906,7 @@ var TokenType;
     TokenType[TokenType["Define"] = 15] = "Define";
     TokenType[TokenType["Comment"] = 16] = "Comment";
     TokenType[TokenType["Pipe"] = 17] = "Pipe";
-})(TokenType || (TokenType = {
-}));
+})(TokenType || (TokenType = {}));
 class Token {
     kind;
     value;
@@ -1065,7 +980,7 @@ class Token {
 const num_re = /^(?:(¬?)([0-9]+(?:\.[0-9]+)?))/;
 const value_re = /^([a-z][a-z_]*)/;
 const string_re = /^'((?:\\.|[^'])+)'/;
-const func_re = /^([+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨λ√⊣⊢!?τ]|:[+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨]|[A-Z][A-Za-z_]*)/;
+const func_re = /^([+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨λ√⊣⊢!?τ▫]|:[+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨]|[A-Z][A-Za-z_]*)/;
 const monad_re = /^([\\/¨`´§]|\.[a-z][a-z_]*)/;
 const dyad_re = /^([•°←↑→↓@¤]|\.[A-Z][a-z_]*)/;
 function tokenize(text, quiet = false) {
@@ -1115,7 +1030,7 @@ function tokenize(text, quiet = false) {
             tokens.push(Token.Sep().span(col, 1));
             col += 1;
             text = text.slice(1);
-        } else if (text[0] == '|') {
+        } else if (text[0] == '◊') {
             tokens.push(Token.Pipe().span(col, 1));
             col += 1;
             text = text.slice(1);
@@ -1198,8 +1113,7 @@ var ExprKind;
     ExprKind[ExprKind["Defn"] = 11] = "Defn";
     ExprKind[ExprKind["Decl"] = 12] = "Decl";
     ExprKind[ExprKind["Guard"] = 13] = "Guard";
-})(ExprKind || (ExprKind = {
-}));
+})(ExprKind || (ExprKind = {}));
 function Expr_Number(n) {
     return {
         kind: ExprKind.Number,
@@ -1356,8 +1270,7 @@ function parse_try_func_or_subj(ctx) {
                 }
                 ctx.code = ctx.code.slice(1);
                 let vkind = 'other';
-                if (exprs.every((e)=>e.kind == ExprKind.Number
-                )) {
+                if (exprs.every((e)=>e.kind == ExprKind.Number)) {
                     vkind = 'num';
                 }
                 return {
@@ -1442,8 +1355,7 @@ function parse_try_subj(ctx) {
                 }
                 ctx.code = ctx.code.slice(1);
                 let vkind = 'other';
-                if (exprs.every((e)=>e.kind == ExprKind.Number
-                )) {
+                if (exprs.every((e)=>e.kind == ExprKind.Number)) {
                     vkind = 'num';
                 }
                 return {
@@ -1536,6 +1448,14 @@ function parse_expr(ctx) {
         };
     }
     if (omega.kind == ExprKind.Train) {
+        if (func.kind == ExprKind.Func && func.name == '▫') {
+            return {
+                kind: ExprKind.Dyad,
+                mod: '•',
+                alpha: omega.alpha,
+                omega: omega.omega
+            };
+        }
         return {
             kind: ExprKind.Fork,
             alpha: func,
@@ -1633,15 +1553,13 @@ function pretty_value_(v) {
                     return [
                         `┌`.padEnd(len + 4),
                         `  ${string[0]}  `,
-                        ...string.slice(1).map((s)=>'  ' + s + '  '
-                        ),
+                        ...string.slice(1).map((s)=>'  ' + s + '  '),
                         `${' '.repeat(len + 3)}┘`
                     ];
                 }
         }
     }
-    if (v._data.every((v)=>typeof v == 'string'
-    )) {
+    if (v._data.every((v)=>typeof v == 'string')) {
         if (v.rank == 1) return [
             `'${v._data.join('')}'`
         ];
@@ -1649,84 +1567,66 @@ function pretty_value_(v) {
         let last = v._strides[v._strides.length - 2];
         let strings = [];
         while(i < v._data.length){
-            if (i != 0 && v._strides.slice(0, -2).some((n)=>i % n == 0
-            )) strings.push("");
+            if (i != 0 && v._strides.slice(0, -2).some((n)=>i % n == 0)) strings.push("");
             strings.push(v._data.slice(i, i + last).join(''));
             i += last;
         }
-        return strings.map((s, i)=>(i > 0 ? ' ' : '"') + s + (i == strings.length - 1 ? '"' : ' ')
-        );
+        return strings.map((s, i)=>(i > 0 ? ' ' : '"') + s + (i == strings.length - 1 ? '"' : ' '));
     }
-    let strings = v._data.map((v)=>pretty_value_(makeBox(v))
-    );
+    let strings = v._data.map((v)=>pretty_value_(makeBox(v)));
     if (v.rank == 1) {
         let sizes = strings.map((ss)=>[
                 ss[0].length,
                 ss.length
-            ]
-        );
-        let max_height = Math.max(...sizes.map((b)=>b[1]
-        ));
+            ]);
+        let max_height = Math.max(...sizes.map((b)=>b[1]));
         if (max_height == 1) return [
-            `⟨ ${strings.map((ss)=>ss.join(' ')
-            ).join(' ')} ⟩`
+            `⟨ ${strings.map((ss)=>ss.join(' ')).join(' ')} ⟩`
         ];
         let layers = [];
         for(let i = 0; i < max_height; i++){
-            let layer = strings.map((ss, j)=>ss[i] ?? ' '.repeat(sizes[j][0])
-            );
+            let layer = strings.map((ss, j)=>ss[i] ?? ' '.repeat(sizes[j][0]));
             layers.push(layer.join(' '));
         }
         const len = layers[0].length;
         return [
             `┌─`.padEnd(len + 4),
             `│ ${layers[0]}  `,
-            ...layers.slice(1).map((ss)=>'  ' + ss + '  '
-            ),
+            ...layers.slice(1).map((ss)=>'  ' + ss + '  '),
             `${' '.repeat(len + 3)}┘`
         ];
     }
-    let max_hei = Math.max(...strings.map((ss)=>ss.length
-    ));
+    let max_hei = Math.max(...strings.map((ss)=>ss.length));
     if (v.rank == 2 && max_hei == 1) {
         let i = 0;
         let last = v._strides[v._strides.length - 2];
         let strings = [];
         let col_max = Array(last).fill(0);
         while(i < v._data.length){
-            if (i != 0 && v._strides.slice(0, -2).some((n)=>i % n == 0
-            )) strings.push([
+            if (i != 0 && v._strides.slice(0, -2).some((n)=>i % n == 0)) strings.push([
                 ""
             ]);
-            const row_string = v._data.slice(i, i + last).map((n)=>pretty_value_(makeBox(n))[0]
-            );
+            const row_string = v._data.slice(i, i + last).map((n)=>pretty_value_(makeBox(n))[0]);
             row_string.forEach((s, i)=>{
                 if (s.length > col_max[i]) col_max[i] = s.length;
             });
             strings.push(row_string);
             i += last;
         }
-        const padded = strings.map((s)=>s.map((s, i)=>s.padStart(col_max[i])
-            ).join(' ')
-        );
+        const padded = strings.map((s)=>s.map((s, i)=>s.padStart(col_max[i])).join(' '));
         return [
             `┌─`.padEnd(padded[0].length + 4),
             `│ ${padded[0]}  `,
-            ...padded.slice(1).map((x)=>'  ' + x + '  '
-            ),
+            ...padded.slice(1).map((x)=>'  ' + x + '  '),
             `${' '.repeat(padded[0].length + 3)}┘`
         ];
     }
-    let len = Math.max(...strings.map((ss)=>ss[0].length
-    ));
+    let len = Math.max(...strings.map((ss)=>ss[0].length));
     return [
         `┌~${v._shape.join(' ')}`.padEnd(len + 4),
         `╵ ${strings[0][0]}  `,
-        ...strings[0].slice(1).map((s)=>'  ' + s + '  '
-        ),
-        ...strings.slice(1).flatMap((s)=>s.map((s)=>'  ' + s + '  '
-            ).join('\n')
-        ),
+        ...strings[0].slice(1).map((s)=>'  ' + s + '  '),
+        ...strings.slice(1).flatMap((s)=>s.map((s)=>'  ' + s + '  ').join('\n')),
         `${' '.repeat(len + 3)}┘`
     ];
 }
@@ -1799,13 +1699,13 @@ const builtin_functions = {
         merge,
         cmp_gt
     ],
-    '=': [
-        length,
-        cmp_eq
-    ],
     '≠': [
         rank,
         cmp_ne
+    ],
+    '=': [
+        length,
+        cmp_eq
     ],
     ':=': [
         count,
@@ -1828,7 +1728,7 @@ const builtin_functions = {
         indexof
     ],
     'ρ': [
-        shape1,
+        shape,
         reshape
     ],
     'φ': [
@@ -1872,11 +1772,11 @@ const builtin_functions = {
         select
     ],
     ':<': [
-        grade_up,
+        grade_down,
         take
     ],
     ':>': [
-        grade_down,
+        grade_up,
         drop
     ],
     'δ': [
@@ -1884,15 +1784,14 @@ const builtin_functions = {
         represent
     ],
     'Format': [
-        (w)=>makeString(pretty_value1(w))
-        ,
+        (w)=>makeString(pretty_value(w)),
         (op, w)=>{
             let n = takeScalar(op);
             switch(n){
                 case 0:
                     return makeScalar(String.fromCharCode(Number(w._data[0])));
                 default:
-                    return makeString(pretty_value1(w));
+                    return makeString(pretty_value(w));
             }
         }
     ],
@@ -1914,8 +1813,7 @@ const builtin_functions = {
         }
     ],
     'Shout': [
-        (w)=>(alert(pretty_value1(w)), w)
-        ,
+        (w)=>(alert(pretty_value(w)), w),
         null
     ],
     '!': [
@@ -1950,79 +1848,64 @@ const builtin_functions = {
 };
 const builtin_functions_undo = {
     '+': [
-        ()=>id
-        ,
+        ()=>id,
         (f)=>(a, w)=>sub(f(w), a)
     ],
     '⊣': [
-        ()=>id
-        ,
+        ()=>id,
         null
     ],
     '⊢': [
-        ()=>id
-        ,
+        ()=>id,
         null
     ],
     '-': [
-        ()=>neg
-        ,
+        ()=>neg,
         (f)=>(a, w)=>add(f(w), a)
     ],
     '~': [
-        ()=>not
-        ,
+        ()=>not,
         null
     ],
     'φ': [
-        ()=>reverse
-        ,
+        ()=>reverse,
         (f)=>(a, w)=>rotate(neg(a), f(w))
     ],
     ':φ': [
-        ()=>transpose
-        ,
+        ()=>transpose,
         null
     ],
     '%': [
-        ()=>recp
-        ,
+        ()=>recp,
         (f)=>(a, w)=>div(f(w), a)
     ],
     '^': [
-        ()=>ln
-        ,
+        ()=>ln,
         (f)=>(a, w)=>log(a, f(w))
     ],
     '√': [
-        ()=>(x)=>mult(x, makeScalar(2))
-        ,
+        ()=>(x)=>mult(x, makeScalar(2)),
         (f)=>(a, w)=>pow(f(w), a)
     ],
     ':^': [
-        ()=>exp
-        ,
+        ()=>exp,
         (f)=>(a, w)=>pow(a, f(w))
     ],
     '<': [
-        ()=>first
-        ,
+        ()=>first,
         null
     ],
     ';': [
-        (before)=>(x)=>reshape(shape1(before), x)
-        ,
+        (before)=>(x)=>reshape(shape(before), x),
         null
     ],
     ':;': [
-        ()=>first_cell
-        ,
+        ()=>first_cell,
         null
     ],
     'ρ': [
-        (before)=>(x)=>reshape(x, before)
-        ,
-        (f)=>(_, w)=>reshape(shape1(w), f(w))
+        (before)=>(x)=>reshape(x, before),
+        (f)=>(_, w)=>reshape(shape(w), f(w))
     ],
     '¢': [
         (before)=>(x)=>{
@@ -2032,8 +1915,7 @@ const builtin_functions_undo = {
                 if (x.rank != 0) throw "Rank Error";
                 new_data[0] = x._data[0];
                 return new MultiArray(before._shape, new_data, before._strides);
-            }
-        ,
+            },
         (f)=>(a, w)=>{
                 const j = w._data;
                 pick_indexes(a, w).forEach((i)=>{
@@ -2048,22 +1930,19 @@ const builtin_functions_undo = {
                     ...before._data
                 ];
                 if (x._shape.length != before._shape.length - 1) throw "Shape Error";
-                if (before._shape.slice(1).every((n, i)=>n == x._shape[i]
-                ) == false) throw "Shape Error";
+                if (before._shape.slice(1).every((n, i)=>n == x._shape[i]) == false) throw "Shape Error";
                 const vals = x._data;
                 for(let index = 0; index < vals.length; index++){
                     new_data[index] = vals[index];
                 }
                 return new MultiArray(before._shape, new_data, before._strides);
-            }
-        ,
+            },
         (f)=>(a, w)=>{
                 const j = w._data;
                 if (w.rank == 0) throw "Rank Error";
                 const select = (slice)=>{
                     const value = f(w.slice(slice));
-                    if (slice.shape.length != value.rank && !slice.shape.every((n, i)=>n == value._shape[i]
-                    )) throw "Shape Error";
+                    if (slice.shape.length != value.rank && !slice.shape.every((n, i)=>n == value._shape[i])) throw "Shape Error";
                     for(let i = slice.start, k = 0; i < slice.end; i++){
                         j[i] = value._data[k++];
                     }
@@ -2075,19 +1954,16 @@ const builtin_functions_undo = {
                     return new MultiArray(w._shape, j, w._strides);
                 }
                 let n = takeNumbers(a.deshape());
-                n.forEach((i)=>select(w.getFirst(i))
-                );
+                n.forEach((i)=>select(w.getFirst(i)));
                 return new MultiArray(w._shape, j, w._strides);
             }
     ],
     '$': [
-        ()=>under_indices
-        ,
+        ()=>under_indices,
         (f)=>(a, w)=>{
                 const indices = takeNumbers(a);
                 if (indices.length != w.length) throw "Length Error";
-                const cells = w.firstAxisToArray().map((s)=>w.slice(s)
-                );
+                const cells = w.firstAxisToArray().map((s)=>w.slice(s));
                 let data = [];
                 for(let i = 0; i < indices.length; i++){
                     const n = indices[i];
@@ -2096,8 +1972,7 @@ const builtin_functions_undo = {
                     } else {
                         const result = f(makeBox(cells[i]));
                         if (result.rank != w.rank - 1) throw "Rank Error";
-                        if (!result._shape.every((n, i)=>n == w._shape[i + 1]
-                        )) throw "Shape Error";
+                        if (!result._shape.every((n, i)=>n == w._shape[i + 1])) throw "Shape Error";
                         data = data.concat(result._data);
                     }
                 }
@@ -2156,8 +2031,7 @@ const builtin_monads = {
     '§': ([alpha1, alpha2])=>{
         if (alpha2 == null) throw "An error";
         return [
-            (w)=>alpha2(w, w)
-            ,
+            (w)=>alpha2(w, w),
             (a, w)=>alpha2(w, a)
         ];
     },
@@ -2193,10 +2067,8 @@ const builtin_monads = {
             },
             (a, w)=>{
                 if (alpha2 == null) throw "Function at ` is not infix";
-                if (a.rank == 0) return cellsPrefix((w)=>alpha2(a, w)
-                )(w);
-                if (w.rank == 0) return cellsPrefix((a)=>alpha2(a, w)
-                )(a);
+                if (a.rank == 0) return cellsPrefix((w)=>alpha2(a, w))(w);
+                if (w.rank == 0) return cellsPrefix((a)=>alpha2(a, w))(a);
                 return cellsInfix(alpha2)(a, w);
             }
         ];
@@ -2233,8 +2105,7 @@ const builtin_dyads = {
         if (omega2 == null) throw "Right function at → is not infix";
         if (alpha1 == null) throw "Left function at → is not prefix";
         return [
-            (w)=>omega2(alpha1(w), w)
-            ,
+            (w)=>omega2(alpha1(w), w),
             (a, w)=>omega2(alpha1(a), w)
         ];
     },
@@ -2242,8 +2113,7 @@ const builtin_dyads = {
         if (alpha2 == null) throw "Left function at ← is not infix";
         if (omega1 == null) throw "Right function at ← is not prefix";
         return [
-            (w)=>alpha2(w, omega1(w))
-            ,
+            (w)=>alpha2(w, omega1(w)),
             (a, w)=>alpha2(a, omega1(w))
         ];
     },
@@ -2268,7 +2138,7 @@ const builtin_dyads = {
                     result = alpha2(a, result);
                 }
                 return result;
-            }, 
+            }
         ];
     },
     '↓': ([alpha1, alpha2], [omega1, omega2])=>{
@@ -2299,7 +2169,7 @@ const builtin_dyads = {
         ];
     }
 };
-function pretty_value1(v) {
+function pretty_value(v) {
     return pretty_value_(v).join('\n');
 }
 function evaluate_func(e, self, context_alpha, context_omega, globals, funcs) {
@@ -2414,13 +2284,9 @@ function evaluate_func(e, self, context_alpha, context_omega, globals, funcs) {
                             case ExprKind.Guard:
                                 {
                                     const val = evaluate(def_or_guard.expr, rec, a, w, locals, locals_funcs);
-                                    if (val._data.length == 0) {
-                                        return evaluate(def_or_guard.fall, rec, a, w, locals, locals_funcs);
-                                    }
-                                    if (val.rank == 0 && !val._data[0]) {
-                                        return evaluate(def_or_guard.fall, rec, a, w, locals, locals_funcs);
-                                    }
-                                    break;
+                                    if (val._data.length == 0) break;
+                                    if (val.rank == 0 && val._data[0] == 0) break;
+                                    return evaluate(def_or_guard.fall, rec, a, w, locals, locals_funcs);
                                 }
                             default:
                                 evaluate(def_or_guard, rec, a, w, locals, locals_funcs);
@@ -2429,8 +2295,7 @@ function evaluate_func(e, self, context_alpha, context_omega, globals, funcs) {
                     return evaluate(last, rec, a, w, locals, locals_funcs);
                 };
                 const rec = [
-                    (w)=>make_the_things(makeEmpty(), w)
-                    ,
+                    (w)=>make_the_things(makeEmpty(), w),
                     (a, w)=>make_the_things(a, w)
                 ];
                 return rec;
@@ -2439,8 +2304,7 @@ function evaluate_func(e, self, context_alpha, context_omega, globals, funcs) {
             {
                 const val = evaluate(e, self, context_alpha, context_omega, globals, funcs);
                 return [
-                    ()=>val
-                    ,
+                    ()=>val,
                     ()=>val
                 ];
             }
@@ -2468,8 +2332,7 @@ function evaluate(e, self, context_alpha, context_omega, globals, funcs) {
                 if (e.value.length == 0) {
                     return makeEmpty();
                 }
-                let vals = e.value.map((e)=>unwrapBox(evaluate(e, self, context_alpha, context_omega, globals, funcs))
-                );
+                let vals = e.value.map((e)=>unwrapBox(evaluate(e, self, context_alpha, context_omega, globals, funcs)));
                 return makeArray(vals);
             }
         case ExprKind.Prefix:
@@ -2494,10 +2357,9 @@ function evaluate(e, self, context_alpha, context_omega, globals, funcs) {
             throw `Value Error: Not a value - ${pretty_expr(e)}`;
     }
 }
-function run1(expr, globals, foreign) {
+function run(expr, globals, foreign) {
     let stmts = parse(expr);
-    let funcs = {
-    };
+    let funcs = {};
     for(const f in foreign){
         funcs[f] = [
             foreign[f],
@@ -2530,13 +2392,9 @@ function run1(expr, globals, foreign) {
             case ExprKind.Guard:
                 {
                     const val = evaluate(def_or_guard.expr, self_, alpha, omega, locals, funcs);
-                    if (val._data.length == 0) {
-                        return evaluate(def_or_guard.fall, self_, alpha, omega, locals, funcs);
-                    }
-                    if (val.rank == 0 && !val._data[0]) {
-                        return evaluate(def_or_guard.fall, self_, alpha, omega, locals, funcs);
-                    }
-                    break;
+                    if (val._data.length == 0) break;
+                    if (val.rank == 0 && val._data[0] == 0) break;
+                    return evaluate(def_or_guard.fall, self_, alpha, omega, locals, funcs);
                 }
             default:
                 evaluate(def_or_guard, self_, alpha, omega, locals, funcs);
@@ -2545,16 +2403,13 @@ function run1(expr, globals, foreign) {
     const last_result = evaluate(stmts[stmts.length - 1], self_, alpha, omega, locals, funcs);
     return last_result;
 }
-const Cast1 = {
-    number: (n)=>makeScalar(n)
-    ,
-    string: (s)=>makeString(s)
-    ,
-    nil: ()=>makeEmpty()
-    ,
+const Cast = {
+    number: (n)=>makeScalar(n),
+    string: (s)=>makeString(s),
+    nil: ()=>makeEmpty(),
     array: (a)=>makeArray(a)
 };
-function tokens1(expr) {
+function tokens(expr) {
     const table = {
         [TokenType.Func]: 'func',
         [TokenType.Monad]: 'monad',
@@ -2582,7 +2437,10 @@ function tokens1(expr) {
                     text: expr.slice(col, start)
                 });
             }
-            const end_kind = table[tk.kind] ?? 'none';
+            let end_kind = table[tk.kind] ?? 'none';
+            if (tk.kind == TokenType.Func && tk.value == '▫') {
+                end_kind = 'control';
+            }
             code.push({
                 kind: end_kind,
                 text: expr.slice(start, end)
@@ -2594,7 +2452,7 @@ function tokens1(expr) {
         return null;
     }
 }
-const symbol_overstrike1 = {
+const symbol_overstrike = {
     '√': '-/',
     '∧': '/\\',
     '∨': '\\/',
@@ -2629,9 +2487,10 @@ const symbol_overstrike1 = {
     'λ': 'll',
     'ω': 'ww',
     '¬': '--',
-    'ø': 'o/'
+    'ø': 'o/',
+    '◊': '<>'
 };
-const symbol_names1 = {
+const symbol_names = {
     functions: {
         '+': [
             'Id',
@@ -2813,9 +2672,9 @@ const symbol_names1 = {
         '@': 'Choose'
     }
 };
-export { pretty_value1 as pretty_value };
-export { run1 as run };
-export { Cast1 as Cast,  };
-export { tokens1 as tokens };
-export { symbol_overstrike1 as symbol_overstrike,  };
-export { symbol_names1 as symbol_names };
+export { pretty_value as pretty_value };
+export { run as run };
+export { Cast as Cast,  };
+export { tokens as tokens };
+export { symbol_overstrike as symbol_overstrike,  };
+export { symbol_names as symbol_names };
