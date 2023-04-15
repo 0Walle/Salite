@@ -219,11 +219,7 @@ export const rotate: Infix = (x, y) => {
 
     let rotated_slices
 
-    if (n > 0) {
-        rotated_slices = Array(len).fill(0).map((_, i) => (i + (n % len)) % len)
-    } else {
-        rotated_slices = Array(len).fill(0).map((_, i) => (i + (len - n % len)) % len)
-    }
+    rotated_slices = Array(len).fill(0).map((_, i) => (i + (len - n % len)) % len)
 
     const rotated = y.select(rotated_slices)
     return rotated

@@ -45,7 +45,7 @@ export class Token {
 const num_re = /^(?:(¬?)([0-9]+(?:\.[0-9]+)?))/
 const value_re = /^([a-z][a-z_]*)/
 const string_re = /^'((?:\\.|[^'])+)'/
-const func_re = /^([+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨λ√⊣⊢!?τ]|:[+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨]|[A-Z][A-Za-z_]*)/
+const func_re = /^([+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨λ√⊣⊢!?τ▫]|:[+\-*%^;~$≤<>≥=≠ριφεμδ¢∧∨]|[A-Z][A-Za-z_]*)/
 
 const monad_re = /^([\\/¨`´§]|\.[a-z][a-z_]*)/
 const dyad_re = /^([•°←↑→↓@¤]|\.[A-Z][a-z_]*)/
@@ -101,7 +101,7 @@ export function tokenize(text: string, quiet = false): Token[] {
             tokens.push(Token.Sep().span(col, 1))
             col += 1
             text = text.slice(1)
-        } else if (text[0] == '|') {
+        } else if (text[0] == '◊') {
             tokens.push(Token.Pipe().span(col, 1))
             col += 1
             text = text.slice(1)
@@ -559,6 +559,11 @@ function parse_expr(ctx: PCtx): Expr | null {
     }
 
     if (omega.kind == ExprKind.Train) {
+
+        if (func.kind == ExprKind.Func && func.name == '▫') {
+            return { kind: ExprKind.Dyad, mod: '•', alpha: omega.alpha, omega: omega.omega }
+        }
+
         return { kind: ExprKind.Fork, alpha: func, infix: omega.alpha, omega: omega.omega }
     }
 

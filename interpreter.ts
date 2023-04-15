@@ -169,8 +169,8 @@ const builtin_functions: FuncMap = {
     '<': [Functions.enclose, Functions.cmp_lt],
     '≥': [null, Functions.cmp_ge],
     '>': [Functions.merge, Functions.cmp_gt],
-    '=': [Functions.length, Functions.cmp_eq],
     '≠': [Functions.rank, Functions.cmp_ne],
+    '=': [Functions.length, Functions.cmp_eq],
     ':=': [Functions.count, Functions.match],
     ':≠': [Functions.depth, Functions.not_match],
 
@@ -194,8 +194,8 @@ const builtin_functions: FuncMap = {
     '¢': [Functions.first, Functions.pick],
     ':¢': [Functions.first_cell, Functions.select],
 
-    ':<': [Functions.grade_up, Functions.take],
-    ':>': [Functions.grade_down, Functions.drop],
+    ':<': [Functions.grade_down, Functions.take],
+    ':>': [Functions.grade_up, Functions.drop],
 
     'δ': [null, Functions.represent],
 
@@ -628,15 +628,10 @@ function evaluate_func(e: Expr, self: FuncDesc, context_alpha: Value, context_om
                         case ExprKind.Guard: {
                             const val = evaluate(def_or_guard.expr, rec, a, w, locals, locals_funcs)
 
-                            if (val._data.length == 0) {
-                                return evaluate(def_or_guard.fall, rec, a, w, locals, locals_funcs)
-                            }
+                            if (val._data.length == 0) break
+                            if (val.rank == 0 && val._data[0] == 0) break
 
-                            if (val.rank == 0 && !val._data[0]) {
-                                return evaluate(def_or_guard.fall, rec, a, w, locals, locals_funcs)
-                            }
-
-                            break
+                            return evaluate(def_or_guard.fall, rec, a, w, locals, locals_funcs)
                         }
                         default:
                             evaluate(def_or_guard, rec, a, w, locals, locals_funcs)
@@ -758,15 +753,10 @@ export function run(expr: string, globals: ValueMap, foreign: {[s: string]: (w: 
             case ExprKind.Guard: {
                 const val = evaluate(def_or_guard.expr, self_, alpha, omega, locals, funcs)
 
-                if (val._data.length == 0) {
-                    return evaluate(def_or_guard.fall, self_, alpha, omega, locals, funcs)
-                }
+                if (val._data.length == 0) break
+                if (val.rank == 0 && val._data[0] == 0) break
 
-                if (val.rank == 0 && !val._data[0]) {
-                    return evaluate(def_or_guard.fall, self_, alpha, omega, locals, funcs)
-                }
-
-                break
+                return evaluate(def_or_guard.fall, self_, alpha, omega, locals, funcs)
             }
             default:
                 evaluate(def_or_guard, self_, alpha, omega, locals, funcs)
@@ -815,7 +805,11 @@ export function tokens(expr: string): { kind: string, text: string }[] | null {
                 code.push({ kind: 'none', text: expr.slice(col, start) })
             }
             
-            const end_kind = table[tk.kind] ?? 'none'
+            
+            let end_kind = table[tk.kind] ?? 'none'
+            if (tk.kind == TokenType.Func && tk.value == '▫') {
+                end_kind = 'control'
+            }
 
             code.push({ kind: end_kind, text: expr.slice(start, end) })
 
@@ -863,6 +857,7 @@ export const symbol_overstrike = {
     'ω': 'ww',
     '¬': '--',
     'ø': 'o/',
+    '◊': '<>',
 }
 
 // ΓΞΔΠΣΘΛΨΩ @!&|
@@ -948,7 +943,7 @@ export const symbol_names = {
 // :ε→(⊣:;=¨•(ιμ⊢)) 'mississipi'
 // (:ε:;(=¨:ε→ι→μ)) 'mississipi'
 
-// ¢+/(<+\→*•=¨:ε) 'mississippi'
+// +/(<+\→*•=¨:ε) 'mississippi'
 
 // (<:≤§¨ι•(1→+)•=) 'abcde'
 
@@ -992,4 +987,16 @@ Fac_rec :: {
 Fac :: (1→Fac_rec),
 
 [Fac 2, Fac 3, Fac 4]
+*/
+
+/*
+words :: ((+\' '→=) μ ⊢) text,
+Take :: {+/ 32 ≥ +\ =¨ ω},
+qt :: ø {
+    =ω > 0 | α,
+    n :: Take ω,
+    (α ; n) λ n :> ω
+} words,
+qd :: 0 ; ¬1 :> +\ qt,
+;/¨ qt :<¨ qd :>¨ <words
 */
