@@ -17,20 +17,27 @@
             flex-direction: column;
         }
 
+        button {
+            margin: 5px;
+            border-color: #0c0d0e;
+            color: #d6d7d9;
+            background-color: #141515;
+        }
+
         .editor-style {
             position: absolute;
             top: 0;
             left: 0;
             font-family: 'Salite', 'Consolas', 'Fira Code', monospace;
-            font-size: 18px;
+            font-size: 14px;
             margin: 0px;
             padding: 10px;
             border: 0;
 
-            line-height: 24px;
+            line-height: 18px;
 
             width: calc(100% - 20px);
-            height: 200px;
+            height: 300px;
 
             /* overflow: auto; */
         }
@@ -51,7 +58,7 @@
         }
 
         #edit-container {
-            height: 230px;
+            height: 320px;
             position: relative;
         }
 
@@ -113,17 +120,19 @@
     </style>
 </head>
 <body>
-    <script type="module" src="./js/salite.js"></script>
+    <script type="module" src="../build/salite.js"></script>
     <div id="salite-symboard" class="salite-theme"></div>
     <div id='general-container'>
         <div id="edit-container">
             <textarea id="salite-input" class='editor-style' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
             <div id='salite-code' class='salitehl editor-style'></div>
         </div>
+        <button id="run-button">Run</button>
         <div id='salite-output' class='salite-theme'>&nbsp;</div>
+        
     </div>
     <script type="module">
-        import { run, tokens, pretty_value, symbol_names, symbol_overstrike, Cast } from "./js/salite.js"
+        import { run, tokens, pretty_value, symbol_names, symbol_overstrike, Cast } from "../build/salite.js"
 
         const input = document.getElementById('salite-input')
         const display = document.getElementById('salite-code')
@@ -167,7 +176,7 @@
                 if (func == '∧') spacer();
                 if (func == '≤') spacer();
                 if (func == ';') spacer();
-                if (func == 'δ') spacer();
+                if (func == '!') spacer();
 
                 element(func, `${symbol_names.functions[func][0] ?? '-'}\n${symbol_names.functions[func][1] ?? '-'}`, 'salitehl-func')
             }
@@ -196,6 +205,8 @@
             element('λ', 'Self Reference', 'salitehl-func')
             element('α', 'Alpha', 'salitehl')
             element('ω', 'Omega', 'salitehl')
+            element('◊', 'Guard', 'salitehl')
+            
         }
 
         function update() {
@@ -228,9 +239,14 @@
         }
 
         function run_code() {
+            function stringify(v) {
+                return v._data.join('')
+            }
+
             try {
+
                 let result = run(input.value, {}, {
-                    'Prompt': () => Cast.string(prompt())
+                    'Prompt': () => Cast.string(prompt()),
                 })
     
                 output.innerText = pretty_value(result)
@@ -322,6 +338,7 @@
                 case '/\\': return '∧'
                 case '\\/': return '∨'
                 case '8_': return '∞'
+                case '<>': return '◊'
                 case 'pi': return 'π'
                 case 'ox': return '¤'
                 case 'aa': return 'α'
@@ -360,6 +377,10 @@
             input.selectionEnd = start + 1
 
             update()
+        })
+
+        document.getElementById('run-button').addEventListener("click", () => {
+            run_code()
         })
 
         init()
