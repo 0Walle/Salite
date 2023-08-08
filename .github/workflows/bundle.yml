@@ -1,0 +1,37 @@
+name: Bundle webpage
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "checkout"
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
+
+      - run: npm install esbuild
+      - run: node build.mjs
+
+      - name: "configure GitHub Pages"
+        uses: actions/configure-pages@v3.0.2
+
+      - name: "upload pages artifact"
+        uses: actions/upload-pages-artifact@v1.0.7
+        path: gh-pages
+
+      - name: "deploy to GitHub Pages"
+        id: deployment
+        uses: actions/deploy-pages@v2
