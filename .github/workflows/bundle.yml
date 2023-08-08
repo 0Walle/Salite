@@ -17,6 +17,12 @@ jobs:
       - name: "checkout"
         uses: actions/checkout@v3
 
+      - name: Setup Directories
+        run: |
+          set -ex
+          mkdir _site
+          cp -R gh-pages _site
+
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
@@ -30,8 +36,6 @@ jobs:
 
       - name: "upload pages artifact"
         uses: actions/upload-pages-artifact@v1.0.7
-        with:
-          path: gh-pages
 
       - name: "deploy to GitHub Pages"
         id: deployment

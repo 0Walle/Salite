@@ -8,7 +8,7 @@ await esbuild.build({
   banner: {
     js: '// deno-fmt-ignore-file\n// deno-lint-ignore-file'
   },
-  outfile: './gh-pages/js/salite.web.js',
+  outfile: './_site/js/salite.web.js',
 })
 
 await esbuild.build({
@@ -19,5 +19,5 @@ await esbuild.build({
   banner: {
     js: '// deno-fmt-ignore-file\n// deno-lint-ignore-file'
   },
-  outfile: './gh-pages/js/salite.pretty.js',
+  outfile: './_site/js/salite.pretty.js',
 })
