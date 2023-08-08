@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salite</title>
+    <link rel="stylesheet" href="css/font.css">
+    <style>
+        html {
+            background-color: #131516 !important;
+        }
+
+        body {
+            margin: 0px;
+            background: transparent;
+            display: flex;
+            flex-direction: column;
+        }
+
+        button {
+            margin: 5px;
+            border-color: #0c0d0e;
+            color: #d6d7d9;
+            background-color: #141515;
+        }
+
+        .editor-style {
+            position: absolute;
+            top: 0;
+            left: 0;
+            font-family: 'Salite', 'Consolas', monospace;
+            font-size: 14px;
+            margin: 0px;
+            padding: 10px;
+            border: 0;
+
+            line-height: 18px;
+
+            width: calc(100% - 20px);
+            height: 300px;
+
+            /* overflow: auto; */
+        }
+
+        #salite-input {
+            z-index: 1;
+            background: transparent;
+            color: transparent;
+            caret-color: white;
+            resize: none;
+            outline: none;
+        }
+
+        #salite-code {
+            z-index: 0;
+            background-color: #0e0e0e;
+            overflow: hidden;
+        }
+
+        #edit-container {
+            height: 320px;
+            position: relative;
+        }
+
+        .salite-theme {
+            font-family: 'Salite', 'Consolas', 'Fira Code', monospace;
+            background-color: #0e0e0e;
+            color: #afafaf;
+        }
+
+        #salite-output {
+            padding: 10px;
+            border: 0;
+            width: calc(100% - 20px);
+            white-space: pre;
+            overflow-x: auto;
+
+            line-height: 16px;
+        }
+
+        #salite-symboard {
+            padding: 10px;
+            border: 0;
+            width: calc(100% - 20px);
+            /* width: 100vw; */
+            /* position: absolute; */
+            /* top: 0px; */
+            margin-bottom: 10px;
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        #salite-symboard span {
+            padding: 0px 2px;
+            user-select: none;
+        }
+
+        #salite-symboard span:hover {
+            background-color: #4e4e4e;
+        }
+
+        #salite-symboard .symbol-list-spacer {
+            width: 1em;
+            height: 1em;
+        }
+        
+        .salitehl {
+            color: #afafaf;
+            white-space: pre;
+        }
+
+        .salitehl-func { color: #36F95F; }
+        .salitehl-monad { color: #F6A95F; }
+        .salitehl-dyad { color: #F6595F; }
+        .salitehl-string { color: #66D9EF; }
+        .salitehl-const { color: #B649BF; }
+        .salitehl-control { color: #bebd57; }
+        .salitehl-comment { color: #55566b; }
+        .salitehl-error { text-decoration: underline wavy #F6595F; }
+    </style>
+</head>
+<body>
+    <script type="module" src="../build/salite.web.js"></script>
+    <script type="module" src="../build/salite.pretty.js"></script>
+    <div id="salite-symboard" class="salite-theme"></div>
+    <div id='general-container'>
+        <div id="edit-container">
+            <textarea id="salite-input" class='editor-style' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+            <div id='salite-code' class='salitehl editor-style'></div>
+        </div>
+        <button id="run-button">Run</button>
+        <div id='salite-output' class='salite-theme'>&nbsp;</div>
+    </div>
+    <script type="module">
+        import * as Salite from "../build/salite.web.js"
+        import * as PrettyPrinter from "../build/salite.pretty.js"
+        // import { run, tokens, prettyValue, symbol_names, symbol_overstrike, Cast } from "../build/salite.js"
+        // import * as Salite from "../build/salite.js"
+
+        const input = document.getElementById('salite-input')
+        const display = document.getElementById('salite-code')
+        const output = document.getElementById('salite-output')
+
+        const symbol_board = document.getElementById('salite-symboard')
+        
+        const overstrike_table = {}
+
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function editor_insert(text) {
+            const start = input.selectionStart
+            const end = input.selectionEnd
+            input.value = input.value.slice(0, start) + text + input.value.slice(end)
+            update()
+            input.selectionStart = start + text.length
+            input.selectionEnd = start + text.length
+            input.focus()
+        }
+
+        function init() {
+            function spacer() {
+                const btn = document.createElement('div')
+                btn.classList.add('symbol-list-spacer')
+                symbol_board.appendChild(btn)
+            }
+
+            function element(name, title, hl, glstk) {
+                const btn = document.createElement('span')
+
+                if (glstk != undefined) {
+                    overstrike_table[glstk] = name
+                    title = title + `\n\nType: ${glstk} <tab>`
+                }
+
+                btn.innerText = name
+                btn.classList.add(hl)
+                btn.setAttribute('title', title)
+                btn.addEventListener('click', () => editor_insert(name) )
+
+                symbol_board.appendChild(btn)
+            }
+
+            for (const func in Salite.symbolNames.functions) {
+                const [pname,iname,glstk] = Salite.symbolNames.functions[func];
+                if (func == '∧') spacer();
+                if (func == '≤') spacer();
+                if (func == '¢') spacer();
+                if (func == 'ρ') spacer();
+                if (func == '!') spacer();
+
+                element(func, `${pname ?? '-'}\n${iname ?? '-'}`, 'salitehl-func', glstk)
+            }
+
+            spacer()
+
+            for (const func in Salite.symbolNames.monads) {
+                const [mname, glstk] = Salite.symbolNames.monads[func]
+                element(func, mname, 'salitehl-monad', glstk)
+            }
+
+            spacer()
+
+            for (const func in Salite.symbolNames.dyads) {
+                const [mname, glstk] = Salite.symbolNames.dyads[func]
+                element(func, mname, 'salitehl-dyad', glstk)
+            }
+
+            spacer()
+
+            element('¬', 'Minus', 'salitehl-const', '--')
+            element('π', 'Pi', 'salitehl-const', 'pi')
+            element('τ', 'Tau', 'salitehl-const', 'tt')
+            element('∞', 'Infinity', 'salitehl-const', 'nf')
+            element('ø', 'Empty', 'salitehl-const', 'o/')
+
+            spacer()
+
+            element('λ', 'Self Reference', 'salitehl-func', 'll')
+            element('α', 'Alpha', 'salitehl', 'aa')
+            element('ω', 'Omega', 'salitehl', 'ww')
+            element('ƒ', 'Function', 'salitehl', 'ff')
+            element(':', 'Strand', 'salitehl-control')
+            element('◊', 'Guard', 'salitehl-control', '<>')
+            element('‼', 'Mutate', 'salitehl-control', '!!')
+        }
+
+        function update() {
+            let tks = Salite.tokenize(input.value)
+
+            if (tks == null) return
+
+            const output = tks.map(tk => {
+                const safe = escapeHtml(tk.text)
+                switch (tk.kind) {
+                    case 'none': return `${tk.text}`
+                    case 'error': return `<span class='salitehl-error'>${safe}</span>`
+                    case 'func': return `<span class='salitehl-func'>${safe}</span>`
+                    case 'monad': return `<span class='salitehl-monad'>${safe}</span>`
+                    case 'dyad': return `<span class='salitehl-dyad'>${safe}</span>`
+                    case 'const': return `<span class='salitehl-const'>${safe}</span>`
+                    case 'string': return `<span class='salitehl-string'>${safe}</span>`
+                    case 'comment': return `<span class='salitehl-comment'>${safe}</span>`
+                    case 'control': return `<span class='salitehl-control'>${safe}</span>`
+                }
+            }).join('')
+
+            display.innerHTML = `<span>${output}</span>`
+
+            sync_scroll()
+        }
+
+        function sync_scroll() {
+            display.scrollTop = input.scrollTop;
+            display.scrollLeft = input.scrollLeft;
+        }
+
+        function run_code() {
+            try {
+                output.innerText = ''
+
+			    const result = Salite.execute(input.value, {
+                    'Display': Salite.Cast.func((y, x) => {
+                        output.innerText += PrettyPrinter.prettyValue(y).join('\n') + '\n';
+                        return x ?? y;
+                    }),
+                    'Out': Salite.Cast.func((y, x) => {
+                        output.innerText += PrettyPrinter.simpleValue(y) + '\n';
+                        return x ?? y;
+                    }),
+                    'Prompt': Salite.Cast.func((y, x) => {
+                        const s = PrettyPrinter.simpleValue(y);
+                        const r = prompt(s);
+                        return r ? Salite.Cast.fromString(r) : (x ?? Salite.Cast.nil());
+                    }),
+                    'digits': Salite.Cast.fromString('0123456789'),
+                    'lowercase': Salite.Cast.fromString('abcdefghijklmnopqrstuvwxyz'),
+                    'uppercase': Salite.Cast.fromString('ABCDEFGHIJKLMNOPQRSTUVWXYZ'),
+                    'upperhex': Salite.Cast.fromString('0123456789ABCDEF'),
+                    'lowerhex': Salite.Cast.fromString('0123456789ABCDEF'),
+                    'letters': Salite.Cast.fromString('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'),
+                });
+    
+                output.innerText += PrettyPrinter.prettyValue(result).join('\n')
+            } catch (e) {
+                if (typeof e == 'string') {
+                    output.innerText = String(e)
+                } else {
+                    output.innerText = e.message
+                    throw e
+                }
+            }
+        }
+
+        function editor_auto_bracket(e, left, right) {
+            if (e.key == right && input.selectionStart == input.selectionEnd) {
+                if (input.value.slice(input.selectionStart, input.selectionStart + 1) == right) {
+                    e.preventDefault()
+                    input.selectionStart += 1
+                    input.selectionEnd = input.selectionStart
+                    update()
+                    return true        
+                }
+            }
+            
+            if (e.key != left) {
+                return false
+            }
+
+            if (input.selectionStart == input.selectionEnd) {
+                const front = input.value.slice(input.selectionStart, input.selectionStart + 1).trim()
+
+                if (front != right && front.length != 0) return false
+            }
+
+            e.preventDefault()
+            const start = input.selectionStart
+            input.value = input.value.slice(0, start) + left + input.value.slice(start, input.selectionEnd) + right + input.value.slice(input.selectionEnd)
+            input.selectionStart = start + 1
+            input.selectionEnd = start + 1
+            update()
+            return true
+        }
+        
+        input.addEventListener('input', update)
+
+        input.addEventListener('scroll', sync_scroll)
+
+        input.addEventListener('keydown', (e) => {
+            
+            if (editor_auto_bracket(e, '(', ')')) { return }
+            if (editor_auto_bracket(e, '[', ']')) { return }
+            if (editor_auto_bracket(e, '{', '}')) { return }
+
+
+            if (e.key == 'Enter' && e.shiftKey) {
+                e.preventDefault()
+                run_code()
+                return
+            }
+
+            if (e.key != 'Tab') return
+
+            e.preventDefault()
+
+            const end = input.selectionStart
+            const start = end - 2
+
+            if (end < 0) return
+
+            const overstrike = input.value.slice(start, end)
+
+            const symbol = overstrike_table[overstrike] ?? null;
+            if (symbol == null) return
+            input.value = input.value.slice(0, start) + symbol + input.value.slice(end)
+
+            input.selectionStart = start + 1
+            input.selectionEnd = start + 1
+
+            update()
+        })
+
+        document.getElementById('run-button').addEventListener("click", () => {
+            run_code()
+        })
+
+        init()
+    </script>
+</body>
+</html>
