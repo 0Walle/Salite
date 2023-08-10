@@ -1,4 +1,4 @@
-import { Box, Nil, sliceCell, Zip, byRank, Pick, selectRank, DataArray, Reshape, byCells, checkShape, leadingAxis } from './array.ts';
+import { Box, Nil, sliceCell, byRank, Pick, selectRank, DataArray, Reshape, byCells, checkShape } from './array.ts';
 import { IntList, NumberArray, BoolArray, StringArray, Iota, isList, isArray, isNil, isNumber, } from './functions_core.ts';
 import { MArray, Value, Prefix, Infix, Bifunc, FuncMap, UndoMap, MonadMap, DyadMap, FuncDesc } from "./types.ts";
 import * as Core from './functions_core.ts';
@@ -228,12 +228,11 @@ function pervasiveInfix(x: Value, y: Value, f: (x: Value, y: Value) => number | 
 			return pervasivePrefix(y as MArray<Value>, k => f(x, k));
 		}
 	} else {
-		return new Zip(x as MArray<Value>, y as MArray<Value>, (a, b) => {
-			if (typeof a == 'object') return pervasiveInfix(a, funcEnclose(b), f);
-			if (typeof b == 'object') return pervasiveInfix(funcEnclose(a), b, f);
-	
-			return f(a, b);
-		})
+		return monadZip(((y, x: Value) => {
+			if (typeof y == 'object') return pervasiveInfix(x, y, f);
+			if (typeof x == 'object') return pervasiveInfix(x, y, f);
+			return f(x, y);
+		}) as Bifunc)(x, y);
 	}
 }
 
@@ -257,22 +256,9 @@ function pervasivePrefix(y: MArray<Value>, f: (x: Value) => number | string): Va
 function makeArithFunctionInfix(name: string, f: (x: Value, y: Value) => number): Infix {
 	return function(x, y) {
 		try {
-			let rx;
-			const R = +(rx = isArray(x)) + +isArray(y);
-
-			if (R == 0) {
-				return f(x, y);
-			} else if (R == 1) {
-				if (rx) {
-					return pervasivePrefix(x as MArray<Value>, k => f(k, y));
-				} else {
-					return pervasivePrefix(y as MArray<Value>, k => f(x, k));
-				}
-			} else {
-				return pervasiveInfix(x, y, f);
-			}
+			return pervasiveInfix(x, y, f);
 		} catch (e) {
-			if (typeof e == 'string') throw Core.errorPrefix(`a${name}w`, e)
+			if (typeof e == 'string') throw Core.errorPrefix(`a${name}w`, e);
 			e.message = `a${name}w: ` + e.message;
 			throw e;
 		}
@@ -281,17 +267,11 @@ function makeArithFunctionInfix(name: string, f: (x: Value, y: Value) => number)
 
 function makeCmpFunctionInfix(name: string, f: (x: Value, y: Value) => number): Infix {
 	return function(x, y) {
-		if (rank(x) == 0 && rank(y) == 0) {
-			return f(x, y)
-		}
-
 		try {
-			if (isArray(x)) return pervasiveInfix(x, isArray(y) ? y : funcEnclose(y), f)
-
-			// return new Zip(funcEnclose(x), isArray(y) ? y : funcEnclose(y), f);
-			return pervasiveInfix(funcEnclose(x), isArray(y) ? y : funcEnclose(y), f)
+			return pervasiveInfix(x, y, f)
 		} catch (e) {
-			if (typeof e == 'string') throw Core.errorPrefix(`a${name}w`, e)
+			if (typeof e == 'string') throw Core.errorPrefix(`a${name}w`, e);
+			e.message = `a${name}w: ` + e.message;
 			throw e;
 		}
 	}
@@ -364,31 +344,31 @@ const funcProduct: Prefix = (y) => {
 	return acc;
 }
 
-const funcMult = makeArithFunctionInfix('×', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw Core.errorPrefix("×", "Operands must be numbers"); return a * b });
-const funcDiv  = makeArithFunctionInfix('÷', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw Core.errorPrefix("÷", "Operands must be numbers"); return a / b });
-const funcPow  = makeArithFunctionInfix('^', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw Core.errorPrefix("^", "Operands must be numbers"); return a ** b });
-const funcRoot = makeArithFunctionInfix('√', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw Core.errorPrefix("√", "Operands must be numbers"); return b ** (1/a) });
-const funcMod  = makeArithFunctionInfix('%', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw Core.errorPrefix("%", "Operands must be numbers"); return a == 0 ? b : b % a });
-const funcLog  = makeArithFunctionInfix('∟', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw Core.errorPrefix("∟", "Operands must be numbers"); return Math.log(b)/Math.log(a) });
-const funcMin  = makeArithFunctionInfix('⌊', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw Core.errorPrefix("⌊", "Operands must be numbers"); return Math.min(a, b) });
-const funcMax  = makeArithFunctionInfix('⌈', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw Core.errorPrefix("⌈", "Operands must be numbers"); return Math.max(a, b) });
-const funcAbDf = makeArithFunctionInfix('±', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw Core.errorPrefix("±", "Operands must be numbers"); return Math.abs(a - b) });
+const funcMult = makeArithFunctionInfix('×', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw "Operands must be numbers"; return a * b });
+const funcDiv  = makeArithFunctionInfix('÷', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw "Operands must be numbers"; return a / b });
+const funcPow  = makeArithFunctionInfix('^', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw "Operands must be numbers"; return a ** b });
+const funcRoot = makeArithFunctionInfix('√', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw "Operands must be numbers"; return b ** (1/a) });
+const funcMod  = makeArithFunctionInfix('%', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw "Operands must be numbers"; return a == 0 ? b : b % a });
+const funcLog  = makeArithFunctionInfix('∟', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw "Operands must be numbers"; return Math.log(b)/Math.log(a) });
+const funcMin  = makeArithFunctionInfix('⌊', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw "Operands must be numbers"; return Math.min(a, b) });
+const funcMax  = makeArithFunctionInfix('⌈', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw "Operands must be numbers"; return Math.max(a, b) });
+const funcAbDf = makeArithFunctionInfix('±', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw "Operands must be numbers"; return Math.abs(a - b) });
 
 
 
-const funcNeg   = makeArithFunctionPrefix('-', x => { if (!isNumber(x)) throw Core.errorPrefix("-", "Not a number"); return -x });
-const _funcRecp  = makeArithFunctionPrefix('÷', x => { if (!isNumber(x)) throw Core.errorPrefix("÷", "Not a number"); return 1/x });
-const funcExp   = makeArithFunctionPrefix('^', x => { if (!isNumber(x)) throw Core.errorPrefix("^", "Not a number"); return Math.exp(x) });
-const funcSqrt  = makeArithFunctionPrefix('√', x => { if (!isNumber(x)) throw Core.errorPrefix("√", "Not a number"); return Math.sqrt(x) });
-const funcAbs   = makeArithFunctionPrefix('%', x => { if (!isNumber(x)) throw Core.errorPrefix("%", "Not a number"); return Math.abs(x) });
-const funcLn    = makeArithFunctionPrefix('∟', x => { if (!isNumber(x)) throw Core.errorPrefix("∟", "Not a number"); return Math.log(x) });
-const funcFloor = makeArithFunctionPrefix('⌊', x => { if (!isNumber(x)) throw Core.errorPrefix("⌊", "Not a number"); return Math.floor(x) });
-const funcCeil  = makeArithFunctionPrefix('⌈', x => { if (!isNumber(x)) throw Core.errorPrefix("⌈", "Not a number"); return Math.ceil(x) });
-const funcSign  = makeArithFunctionPrefix('±', x => { if (!isNumber(x)) throw Core.errorPrefix("±", "Not a number"); return Math.sign(x) });
+const funcNeg   = makeArithFunctionPrefix('-', x => { if (!isNumber(x)) throw "Not a number"; return -x });
+const _funcRecp  = makeArithFunctionPrefix('÷', x => { if (!isNumber(x)) throw "Not a number"; return 1/x });
+const funcExp   = makeArithFunctionPrefix('^', x => { if (!isNumber(x)) throw "Not a number"; return Math.exp(x) });
+const funcSqrt  = makeArithFunctionPrefix('√', x => { if (!isNumber(x)) throw "Not a number"; return Math.sqrt(x) });
+const funcAbs   = makeArithFunctionPrefix('%', x => { if (!isNumber(x)) throw "Not a number"; return Math.abs(x) });
+const funcLn    = makeArithFunctionPrefix('∟', x => { if (!isNumber(x)) throw "Not a number"; return Math.log(x) });
+const funcFloor = makeArithFunctionPrefix('⌊', x => { if (!isNumber(x)) throw "Not a number"; return Math.floor(x) });
+const funcCeil  = makeArithFunctionPrefix('⌈', x => { if (!isNumber(x)) throw "Not a number"; return Math.ceil(x) });
+const funcSign  = makeArithFunctionPrefix('±', x => { if (!isNumber(x)) throw "Not a number"; return Math.sign(x) });
 
-const funcNot = makeArithFunctionPrefix('~', x => { if (!isNumber(x)) throw Core.errorPrefix("~", "Not a number"); return 1-x });
-const funcAnd = makeArithFunctionInfix('∧',(a, b) => { if (!isNumber(a) || !isNumber(b)) throw Core.errorPrefix("∧", "Operands must be numbers"); return a & b });
-const funcOr = makeArithFunctionInfix('∨', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw Core.errorPrefix("∨", "Operands must be numbers"); return a | b });
+const funcNot = makeArithFunctionPrefix('~', x => { if (!isNumber(x)) throw "Not a number"; return 1-x });
+const funcAnd = makeArithFunctionInfix('∧',(a, b) => { if (!isNumber(a) || !isNumber(b)) throw "Operands must be numbers"; return a & b });
+const funcOr = makeArithFunctionInfix('∨', (a, b) => { if (!isNumber(a) || !isNumber(b)) throw "Operands must be numbers"; return a | b });
 
 const funcCmpLe = makeCmpFunctionInfix('≤',(a, b) => _valueLe(a, b));
 const funcCmpLt = makeCmpFunctionInfix('<',(a, b) => 1-_valueGe(a, b));
@@ -469,6 +449,13 @@ function funcMerge(y: Value): Value {
 function funcReshape(x: Value, y: Value) {
 	if (isNumber(x)) return reshape([x], y);
 	const shape = _orElse(_toIntList(x), "aρw", "%a must be a number or list");
+	const tofill = shape.indexOf(-1);
+	if (tofill >= 0) {
+		shape[tofill] = 1;
+		const n = typeof y == 'object' ? Math.ceil(y.count/shape.reduce((a,b)=>a*b)) : 1;
+		shape[tofill] = n;
+		if (n < 0 || isNaN(n)) throw `Invalid Shape ⟨ ${shape.join(' ')} ⟩`;
+	}
 	return reshape(shape, y);
 }
 
@@ -798,9 +785,9 @@ function _generateIndicesNumber(mask: MArray<number>): number[] {
 }
 
 function _generateIndicesConst(mask: number, count: number): number[] {
-	const indices = [];
+	const indices = Array(mask*count);
 	for (let i = 0; i < count; i++) {
-		for (let _ = 0; _ < mask; _++) indices.push(i);
+		for (let j = 0; j < mask; j++) indices[i*mask+j] = i;
 	}
 	return indices;
 }
@@ -1009,7 +996,7 @@ function funcTranspose(y: Value): Value {
 function _take(x: number, y: MArray<Value>): Value {
 	if (x == 0) return Nil;
 	
-	const len = y.shape[0];
+	const len = y.shape[0] ?? 1;
 	const stride = y.count/len;
 
 	const shape = [...y.shape];
@@ -1212,33 +1199,51 @@ function monadEach(f: Bifunc): Prefix {
 	}
 }
 
+function _leadingAxisExtension(t: number[], s: number[]): number | null {
+	let n = 1;
+	let m = 0;
+	while (m < t.length) {	
+		if (s[m] == t[m]) m += 1;
+		else return null;
+	}
+	while (m < s.length) { n *= s[m++]; }
+	return n;
+}
+
 function monadZip(f: Bifunc): Infix {
 	return (x, y) => {
 		if (Core.isNil(y)) return Nil;
 		if (Core.isNil(x)) return Nil;
 
-		if (!isArray(y)) return monadEach(k => f(y, k))(x);
-		if (!isArray(x)) return monadEach(k => f(k, x))(y);
+		if (rank(x) >= rank(y)) {
+			if (typeof x != 'object') return f(y, x);
 
-		const gt = x.shape.length > y.shape.length ? x : y;
-		const _rightLeading = gt == y;
-		const count = gt.count;
+			const r = _leadingAxisExtension(shape(y), shape(x));
+			if (r == null) throw `Shapes Mismatch`;
 
-		const axis = leadingAxis(x.shape, y.shape);
-		if (axis == null) throw `Shapes Mismatch`
-		const _maxj = axis[1];
+			const dy = typeof y == 'object' ? y : new DataArray([1], [y]);
+			const count = x.count;
+			const data = Array(count);
+			for (let i = 0; i < count; i++) {
+				const j = Math.trunc(i/r);
+				data[i] = f(dy.pick(j), x.pick(i));
+			}
+			return new DataArray(shape(x), data);
+		} else {
+			if (typeof y != 'object') return f(y, x);
 
-		if (_maxj == 0) return f(y.pick(0), x.pick(0));
+			const r = _leadingAxisExtension(shape(x), shape(y));
+			if (r == null) throw `Shapes Mismatch`;
 
-		const data = Array(count);
-		for (let i = 0; i < count; i++) {
-			let _i = Math.trunc(i / _maxj);
-			let _j = (_i * _maxj) + i % _maxj;
-			if (!_rightLeading) [_i, _j] = [_j, _i];
-			data[i] = f(y.pick(_j), x.pick(_i));
+			const dx = typeof x == 'object' ? x : new DataArray([1], [x]);
+			const count = y.count;
+			const data = Array(count);
+			for (let i = 0; i < count; i++) {
+				const j = Math.trunc(i/r);
+				data[i] = f(y.pick(i), dx.pick(j));
+			}
+			return new DataArray(shape(y), data);
 		}
-
-		return new DataArray(gt.shape, data);
 	}
 }
 

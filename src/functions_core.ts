@@ -70,9 +70,8 @@ export class FunctionArray implements MArray<Value> {
 	
 	isNil() { return false }
 
-	pick(index: number): Value {
-		if (this.func[0] == null) throw errorPrefix(this.name, `${this.name} is not prefix`);
-		return this.func[0](index);
+	pick(_: number): Value {
+		return Nil;
 	}
 
 	toString() {

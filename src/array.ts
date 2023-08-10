@@ -69,31 +69,6 @@ export function sliceCell<T>(y: MArray<T>, index: number): MArray<T> {
 	return new Slice(y, y.shape.slice(1), stride, index * stride);
 }
 
-function _leadingAxis(s: number[], t: number[]): [number, number] | null {
-	if (s.length == 0) return [1,0];
-
-	let i = 1;
-	let j = s.reduce((a, b) => a*b);
-	let k = 0;
-	while (true) {
-		if (k == t.length) return [i, j];
-	
-		if (s[k] == t[k]) {
-			i *= s[k];
-			j /= s[k];
-			k += 1;
-		} else return null;
-	}
-}
-
-export function leadingAxis(s: number[], t: number[]): [number, number] | null {
-	if (s.length > t.length) {
-		return _leadingAxis(s, t);
-	} else {
-		return _leadingAxis(t, s);
-	}
-}
-
 export class Slice<T> implements MArray<T> {
 	fill: T | undefined
 
@@ -154,44 +129,6 @@ export class Pick<T> implements MArray<T> {
 		if (index >= this.count) throw new Error("Index Error");
 		const i = this.indices.pick(index);
 		return this.parent.pick(i);
-	}
-}
-
-export class Zip<X,Y,R> implements MArray<R> {
-	_shape: number[];
-	_count: number;
-	fill = undefined;
-
-	_maxi: number;
-	_maxj: number;
-	_rightLeading: boolean;
-
-	constructor(private left: MArray<X>, private right: MArray<Y>, private f: (x: X, y: Y) => R) {
-		const gt = left.shape.length > right.shape.length ? left : right;
-		this._rightLeading = gt == right;
-		this._count = gt.count;
-		this._shape = gt.shape;
-
-		const axis = leadingAxis(left.shape, right.shape);
-		if (axis == null) throw `Shapes Mismatch`
-		this._maxi = axis[0];
-		this._maxj = axis[1];
-
-		// console.log('new', this)
-	}
-
-	get shape() { return this._shape }
-	get count() { return this._count }
-
-	isNil() { return this._count == 0 }
-
-	pick(index: number) {
-		if (index >= this.count) throw new Error("Index Error");
-		if (this._maxj == 0) return this.f(this.left.pick(0), this.right.pick(0));
-		let i = Math.trunc(index / this._maxj);
-		let j = (i * this._maxj) + index % this._maxj;
-		if (!this._rightLeading) [i, j] = [j, i];
-		return this.f(this.left.pick(i), this.right.pick(j));
 	}
 }
 

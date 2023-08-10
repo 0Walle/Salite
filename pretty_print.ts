@@ -58,7 +58,7 @@ function smallFrame(ss: string[]) {
 }
 
 function _prettyString(v: StringArray): string[] {
-    if (v.shape.length == 1) return [`'${v.toString()}'`];
+    if (v.shape.length == 1) return [`"${v.toString()}"`];
 
     const lines = v.toStrings();
 

@@ -219,6 +219,7 @@
             element('τ', 'Tau', 'salitehl-const', 'tt')
             element('∞', 'Infinity', 'salitehl-const', 'nf')
             element('ø', 'Empty', 'salitehl-const', 'o/')
+            element('¶', 'New Line', 'salitehl-const', 'nl')
 
             spacer()
 
@@ -265,7 +266,7 @@
             try {
                 output.innerText = ''
 
-			    const result = Salite.execute(input.value, {
+                const result = Salite.execute(input.value, {
                     'Display': Salite.Cast.func((y, x) => {
                         output.innerText += PrettyPrinter.prettyValue(y).join('\n') + '\n';
                         return x ?? y;
