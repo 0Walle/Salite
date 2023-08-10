@@ -41,15 +41,15 @@ export const symbolNames = {
 
         '¢': ['First', 'Pick', 'cc'],
         '@': ['First Cell', 'Select'],
-        '↑': ['Nudge Left', 'Take', '|>'],
-        '↓': ['Nudge Right', 'Drop', '|<'],
+        '↑': ['Prefixes', 'Take', '|>'],
+        '↓': ['Suffixes', 'Drop', '|<'],
         'φ': ['Reverse', 'Rotate', 'qq'],
         'Ø': ['Transpose', null, 'O/'],
 
         
         'ρ': ['Shape', 'Reshape', 'pp'],
         '↕': ['Deshape', 'Windows', '||'],
-        ';': ['Deshape', 'Join To'],
+        ';': ['Join', 'Join To'],
         ':;': ['Enlist', 'Pair'],
         '&': ['Solo', 'Couple'],
         

@@ -472,6 +472,22 @@ function funcReshape(x: Value, y: Value) {
 	return reshape(shape, y);
 }
 
+function funcJoin(y: Value): Value {
+	if (!isList(y)) throw Core.errorPrefix(";w", "%w must be a list");
+	const data = Array<Value>();
+	for (let i = 0; i < y.count; i++) {
+		const e = y.pick(i);
+		if (!isArray(e)) {
+			data.push(e);
+			continue;
+		}
+		for (let j = 0; j < e.count; j++) {
+			data.push(e.pick(j));
+		}
+	}
+	return new DataArray([data.length], data);
+}
+
 function funcJoinTo(x: Value, y: Value): Value {
 	if (isNil(x)) return y;
 	if (isNil(y)) return x;
@@ -781,6 +797,14 @@ function _generateIndicesNumber(mask: MArray<number>): number[] {
 	return indices;
 }
 
+function _generateIndicesConst(mask: number, count: number): number[] {
+	const indices = [];
+	for (let i = 0; i < count; i++) {
+		for (let _ = 0; _ < mask; _++) indices.push(i);
+	}
+	return indices;
+}
+
 function _generateIndicesBool(bools: BoolArray): number[] {	
 	const indices = [];
 	for (let i = 0; i < bools.count; i++) {
@@ -825,6 +849,11 @@ function dyadUnderReplicate(x: Value, y: Value, f: Bifunc): Value {
 }
 
 function funcReplicate(x: Value, y: Value): Value {
+	if (isNumber(x) && isArray(y)) {
+		const indices = new IntList(_generateIndicesConst(x, length(y)), 0)
+		return funcSelect(indices, y);
+	}
+
 	if (!isList(x)) throw Core.errorPrefix("a$w", "Rank of %a must be 1");
 	if (!isArray(y)) throw Core.errorPrefix("a$w", "Rank of %w must be >0");
 	if (y.shape[0] !== x.shape[0]) throw Core.errorPrefix("a$w", "Length of %a must match %w");
@@ -1045,14 +1074,24 @@ function _drop(x: number, y: MArray<Value>): Value {
 	return new Pick(y, new NumberArray(shape, picks));
 }
 
-function funcNudgeRight(y: Value) {
+function funcSuffixes(y: Value) {
 	if (!isArray(y)) throw Core.errorPrefix("↑w", "Rank of %w must be >0");
-	return funcJoinTo(y.fill ?? Nil, y);
+	const len = length(y);
+	const data = Array(len+1);
+	for (let i = 0; i <= len; i++) {
+		data[i] = _drop(i, y);
+	}
+	return new DataArray([len+1], data, Nil);
 }
 
-function funcNudgeLeft(y: Value) {
-	if (!isArray(y)) throw Core.errorPrefix("↓w", "Rank of %w must be >0");
-	return funcJoinTo(y, y.fill ?? Nil);
+function funcPrefixes(y: Value) {
+	if (!isArray(y)) throw Core.errorPrefix("↓w", "%w must be an array");
+	const len = length(y);
+	const data = Array(len+1);
+	for (let i = 0; i <= len; i++) {
+		data[i] = _take(i, y);
+	}
+	return new DataArray([len+1], data, Nil);
 }
 
 //#endregion
@@ -1161,6 +1200,7 @@ function funcSplit(x: Value, y?: Value) {
 
 function monadEach(f: Bifunc): Prefix {
 	return (y) => {
+		if (Core.isNil(y)) return Nil;
 		if (!isArray(y)) return f(y);
 
 		const r = Array(y.count);
@@ -1174,6 +1214,9 @@ function monadEach(f: Bifunc): Prefix {
 
 function monadZip(f: Bifunc): Infix {
 	return (x, y) => {
+		if (Core.isNil(y)) return Nil;
+		if (Core.isNil(x)) return Nil;
+
 		if (!isArray(y)) return monadEach(k => f(y, k))(x);
 		if (!isArray(x)) return monadEach(k => f(k, x))(y);
 
@@ -1366,7 +1409,7 @@ export const builtin_functions: FuncMap = {
     '=': [valences(length, funcCmpEq)],
     '≡': [valences(funcDepth, funcMatch)],
 
-    ';': [valences(funcDeshape, funcJoinTo)],
+    ';': [valences(funcJoin, funcJoinTo)],
     '&': [valences(funcSolo, funcCouple),
 		valences((y) => funcSelect(0, y), _ => _orElse<Value>(null, "&˜", "Must be called with one argument"))],
     ':;': [(y,x?) => new DataArray([x != undefined ? 2 : 1], x != undefined ? [x,y] : [y])],
@@ -1395,13 +1438,13 @@ export const builtin_functions: FuncMap = {
     ':¢': [(y, x?) => x == undefined ? funcPick(0, y) : funcPickIndex(x, y)],
     '@': [(y, x=0) => funcSelect(x, y)],
 
-    '↑': [valences(funcNudgeLeft, (x, y) => {
+    '↑': [valences(funcPrefixes, (x, y) => {
 		if(!isNumber(x)) throw Core.errorPrefix("a↑w", "%a must be a number");
 		if(isNil(y)) return Nil;
 		if(!isArray(y)) throw Core.errorPrefix("a↑w", "%w must be an array"+y+x);
 		return _take(x, y)
 	})],
-    '↓': [valences(funcNudgeRight, (x,y) => {
+    '↓': [valences(funcSuffixes, (x,y) => {
 		if(!isNumber(x)) throw Core.errorPrefix("a↓w", "%a must be a number");
 		if(isNil(y)) return Nil;
 		if(!isArray(y)) throw Core.errorPrefix("a↓w", "%w must be an array"+y+x);
