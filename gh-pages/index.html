@@ -134,8 +134,6 @@
     <script type="module">
         import * as Salite from "./js/salite.web.js"
         import * as PrettyPrinter from "./js/salite.pretty.js"
-        // import { run, tokens, prettyValue, symbol_names, symbol_overstrike, Cast } from "../build/salite.js"
-        // import * as Salite from "../build/salite.js"
 
         const input = document.getElementById('salite-input')
         const display = document.getElementById('salite-code')
@@ -291,9 +289,9 @@
                 output.innerText += PrettyPrinter.prettyValue(result).join('\n')
             } catch (e) {
                 if (typeof e == 'string') {
-                    output.innerText = String(e)
+                    output.innerText += String(e)
                 } else {
-                    output.innerText = e.message
+                    output.innerText += e.message
                     throw e
                 }
             }
