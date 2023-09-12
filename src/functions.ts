@@ -857,9 +857,9 @@ function funcIndices(y: Value): IntList {
 
 function funcDeepWhere(y: Value): Value {
 	const numbers = _toNumberArray(y);
-	if (!numbers) throw Core.errorPrefix("$w", "Elements of %w must be numbers");
+	if (!numbers) throw Core.errorPrefix(":$w", "Elements of %w must be numbers");
 	const indices = _generateIndicesNumber(numbers).map(i => new IntList(Core.represent(numbers.shape, i), 0))
-	return new DataArray(numbers.shape, indices);
+	return new DataArray([indices.length], indices);
 }
 
 function funcRepresent(x: Value, y: Value): Value {
