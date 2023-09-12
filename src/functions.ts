@@ -855,6 +855,13 @@ function funcIndices(y: Value): IntList {
 	return new IntList(_generateIndicesNumber(numbers), 0);
 }
 
+function funcDeepWhere(y: Value): Value {
+	const numbers = _toNumberArray(y);
+	if (!numbers) throw Core.errorPrefix("$w", "Elements of %w must be numbers");
+	const indices = _generateIndicesNumber(numbers).map(i => new IntList(Core.represent(numbers.shape, i), 0))
+	return new DataArray(numbers.shape, indices);
+}
+
 function funcRepresent(x: Value, y: Value): Value {
 	if (isNil(y)) return Nil;
 	if (rank(x) != 1) throw Core.errorPrefix("aδw", "Rank of %a must be 1");
@@ -902,7 +909,10 @@ function funcFirst(y: Value): Value {
 const funcPick: Infix = (x, y) => {
 	if (!isArray(y)) throw Core.errorPrefix('a¢w', "%w must be an array");
 	try {
-		if (isNumber(x)) return y.pick(x);
+		if (isNumber(x)) {
+			if (x < 0) x = y.count + x
+			return y.pick(x);
+		}
 		const numbers = _orElse(_toNumberArray(x), 'a¢w', "%a must be an array of numbers");
 		return Core.pick(numbers, y)
 	} catch (e) {
@@ -1435,6 +1445,7 @@ export const builtin_functions: FuncMap = {
 		if (x != undefined) throw Core.errorPrefix("$˜", "Must be called with one argument");
 		return funcUndoIndices(y);
 	}],
+	':$': [valences(funcDeepWhere, funcReplicate)],
 
     '◄': [(y, x?) => x ?? y],
     '►': [(y, _?) => y],

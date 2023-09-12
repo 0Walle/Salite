@@ -120,7 +120,6 @@ function compileBlock(bytecode: number[], block: Parser.Stmt[], C: ConstValue[],
         const statement = block[i]
         switch (statement.kind) {
             case 4: {
-                L.push(statement.span[0]);
                 const ref = getVar(localScope, statement.name);
                 if (ref == null) throw `Undefined name ${statement.name}`
                 if (statement.value) {
@@ -138,14 +137,12 @@ function compileBlock(bytecode: number[], block: Parser.Stmt[], C: ConstValue[],
                 break;
             }
             case 3:
-                L.push(statement.span[0]);
                 compileFunc(bytecode, statement.value, localScope, C, D);
                 bytecode.push(0x03, 0, localSize);
                 localScope.set(statement.name, localSize++);
                 bytecode.push(0x20);
                 break;
             case 2:
-                L.push(statement.span[0]);
                 compileValue(bytecode, statement.value, localScope, C, D);
                 for (const name of statement.names) {
                     bytecode.push(0x03, 0, localSize);
@@ -156,7 +153,6 @@ function compileBlock(bytecode: number[], block: Parser.Stmt[], C: ConstValue[],
                 break;
             case 1:
                 if (i == block.length-1) throw "Guard at end of block"
-                L.push(statement.span[0]);
                 compileValue(bytecode, statement.expr, localScope, C, D);
                 bytecode.push(0x08);
                 compileValue(bytecode, statement.fall, localScope, C, D);
@@ -164,9 +160,9 @@ function compileBlock(bytecode: number[], block: Parser.Stmt[], C: ConstValue[],
                 continue loop;
                 // break;
             default:
-                L.push(statement.span[0]);
                 compileValue(bytecode, statement.expr, localScope, C, D);
         }
+        L.push(statement.span[0]);
         if (i == block.length-1) { bytecode.push(0x07); }
         else bytecode.push(0x06);
     }
@@ -200,9 +196,10 @@ export function compileProgram(program: Parser.Stmt[], C: ConstValue[], foreign:
     return [bytecode, C, blocks, L];
 }
 
-export function compile(input: string, runtime: ConstValue[], foreign: string[]) {
+export function compile(input: string, runtime: ConstValue[], foreign: string[]): [number[], ConstValue[], Block[], number[]] {
     const program = Parser.parse(input);
-    return compileProgram(program, runtime, foreign.map((x, i) => [x, i]));
+    const [bc, C, D, L] = compileProgram(program, runtime, foreign.map((x, i) => [x, i]))
+    return [bc, C, D, L];
 }
 
 export function tokens(expr: string): { kind: string, text: string }[] | null {

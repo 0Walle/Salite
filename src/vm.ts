@@ -51,8 +51,8 @@ function genJs(bytecode: number[], codep: number): string {
         case 0x02: /* VAR   */ { r += rPsh(`getv(e${'.p'.repeat(num())}, ${num()})`); break; }
         case 0x03: /* VARP  */ { r += rPsh(`{e: e${'.p'.repeat(num())}, p: ${num()}}`); break; }
         // case 0x04: /* VARF  */ { r += rPsh(`getf(e${'.p'.repeat(num())}, ${num()})`); break; }
-        case 0x06: /* POP   */ { rTop--; break; }
-        case 0x07: /* RET   */ { r += `return v0;`; break loop; }
+        case 0x06: /* POP   */ { rTop--; r += `l = ${codep};`; break; }
+        case 0x07: /* RET   */ { r += `l = ${codep};return v0;`; break loop; }
         case 0x08: /* GUARD */ { const c=rPop(); r += `if (tobool(${c})) {`; break; }
         case 0x09: /* GUAR2 */ { rTop--; r += `return v0;}`; break; }
         case 0x0A: /* LIST  */ {
@@ -79,7 +79,7 @@ function genJs(bytecode: number[], codep: number): string {
         }
     }
 
-    // r = "let l; try { \n"+r+"} catch (e) { throw e+' at '+l }";
+    r = "let l=0; try { \n"+r+"} catch (e) { throw e; }";
 
     return "let "+new Array(sizeM).fill(undefined).map((_,i)=>rVar(i)).join(',')+";"+r;
 }
@@ -221,9 +221,12 @@ export function run(B: number[], Cx: (string|number)[], D: Block[], locations: n
         blocks.push(compileBlock(B, codep, runtime, blocks, locations))
     }
 
-    const result = blocks[0](globals)(Nil, Nil);
-
-    return [result, globals];
+    try {
+        const result = blocks[0](globals)(Nil, Nil);
+        return [result, globals];
+    } catch (er) {
+        throw er;
+    }
 }
 
 export const castings = {

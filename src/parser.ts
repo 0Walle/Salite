@@ -151,6 +151,8 @@ export function tokenize(text: string, quiet = false): Token[] {
         }
     }
 
+    // console.log(lineMap);
+
     return tokens
 }
 
