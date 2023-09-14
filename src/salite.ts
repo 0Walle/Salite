@@ -64,6 +64,8 @@ export const symbolNames = {
         '$': ['Indices', 'Replicate'],
         'δ': ['Strides', 'Represent', 'dd'],
         'μ': ['Group Indices', 'Group', 'uu'],
+        '»': ['Grade Up', 'Bins Up', '>>'],
+        '«': ['Grade Down', 'Bins Down', '<<'],
 
         '◄': ['Id', 'Left', '</'],
         '►': ['Id', 'Right', '/>'],

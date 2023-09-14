@@ -748,6 +748,62 @@ function funcOccurrenceCount(y: Value): IntList {
 
 //#region Matching/Sorting Functions
 
+function _binSearch(x: MArray<Value>, y: MArray<Value>): number {
+	let high = length(x)-1;
+	let low = 0;
+	let mid = 0;
+	while (true) {
+		mid = ~~((high+low)/2);
+		const comp = _compareArrays(sliceCell(x, mid), y)
+		if (comp == 0) return mid+1;
+		if (comp > 0) {
+			high = mid-1;
+			if (high < low) return mid;
+		} else {
+			low = mid+1;
+			if (high < low) return mid+1;
+		}
+	}
+}
+
+function _binSearchDown(x: MArray<Value>, y: MArray<Value>): number {
+	let high = length(x)-1;
+	let low = 0;
+	let mid = 0;
+	while (true) {
+		mid = ~~((high+low)/2);
+		const comp = _compareArrays(sliceCell(x, mid), y)
+		if (comp == 0) return mid+1;
+		if (comp < 0) {
+			high = mid-1;
+			if (high < low) return mid;
+		} else {
+			low = mid+1;
+			if (high < low) return mid+1;
+		}
+	}
+}
+
+function funcBinsUp(x: Value, y: Value): Value {
+	if (!isArray(x)) throw Core.errorPrefix('a»w', "%a must be an array");
+	if (!isArray(y)) {
+		return _binSearch(x, funcEnclose(y))
+	}
+
+	const at = Array.from(byCells(y), cell => _binSearch(x, cell))
+	return new IntList(at, 0)
+}
+
+function funcBinsDown(x: Value, y: Value): Value {
+	if (!isArray(x)) throw Core.errorPrefix('a«w', "%a must be an array");
+	if (!isArray(y)) {
+		return _binSearchDown(x, funcEnclose(y))
+	}
+
+	const at = Array.from(byCells(y), cell => _binSearchDown(x, cell))
+	return new IntList(at, 0)
+}
+
 function funcGradeUp(y: Value): IntList {
 	if (!isArray(y)) throw Core.errorPrefix('≥w', "Rank of %w must be >0");
 	const cells = Array.from(byCells(y));
@@ -1449,6 +1505,9 @@ export const builtin_functions: FuncMap = {
 
     '◄': [(y, x?) => x ?? y],
     '►': [(y, _?) => y],
+
+	'«': [valences(funcGradeDown, funcBinsDown)],
+    '»': [valences(funcGradeUp, funcBinsUp)],
 
     '¢': [(y, x=0) => funcPick(x, y)],
     ':¢': [(y, x?) => x == undefined ? funcPick(0, y) : funcPickIndex(x, y)],
